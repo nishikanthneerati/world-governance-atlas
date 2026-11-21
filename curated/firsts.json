@@ -1,0 +1,102 @@
+{
+  "_readme": "Hand-curated 'firsts' and milestones keyed by ISO3. 'wiki' is the English Wikipedia title (used for live profiles and photos). Every country also gets automatic firsts derived from Wikidata office-holder records. Add a country by copying the IND block.",
+  "IND": {
+    "firsts": [
+      { "cat": "Founding", "title": "Independence from British rule", "date": "1947-08-15", "wiki": "Indian Independence Act 1947", "name": "Indian Independence Act 1947" },
+      { "cat": "Executive", "title": "First Prime Minister", "name": "Jawaharlal Nehru", "date": "1947-08-15", "wiki": "Jawaharlal Nehru" },
+      { "cat": "Executive", "title": "First Deputy Prime Minister & Home Minister", "name": "Vallabhbhai Patel", "date": "1947-08-15", "wiki": "Vallabhbhai Patel" },
+      { "cat": "Executive", "title": "First Governor-General of independent India", "name": "Lord Mountbatten", "date": "1947-08-15", "wiki": "Louis Mountbatten, 1st Earl Mountbatten of Burma" },
+      { "cat": "Executive", "title": "First and only Indian Governor-General", "name": "C. Rajagopalachari", "date": "1948-06-21", "wiki": "C. Rajagopalachari" },
+      { "cat": "Executive", "title": "First Law Minister; chaired the Constitution Drafting Committee", "name": "B. R. Ambedkar", "date": "1947-08-15", "wiki": "B. R. Ambedkar" },
+      { "cat": "Executive", "title": "First Finance Minister; presented the first Union Budget (26 Nov 1947)", "name": "R. K. Shanmukham Chetty", "date": "1947-08-15", "wiki": "R. K. Shanmukham Chetty" },
+      { "cat": "Executive", "title": "First Education Minister", "name": "Maulana Abul Kalam Azad", "date": "1947-08-15", "wiki": "Abul Kalam Azad" },
+      { "cat": "Founding", "title": "Constitution adopted by the Constituent Assembly", "date": "1949-11-26", "wiki": "Constitution of India", "name": "Constitution of India" },
+      { "cat": "Executive", "title": "First President (Republic Day)", "name": "Rajendra Prasad", "date": "1950-01-26", "wiki": "Rajendra Prasad" },
+      { "cat": "Executive", "title": "First Vice-President", "name": "Sarvepalli Radhakrishnan", "date": "1952-05-13", "wiki": "Sarvepalli Radhakrishnan" },
+      { "cat": "Judiciary", "title": "First Chief Justice of India", "name": "H. J. Kania", "date": "1950-01-26", "wiki": "H. J. Kania" },
+      { "cat": "Judiciary", "title": "First Attorney General", "name": "M. C. Setalvad", "date": "1950-01-28", "wiki": "M. C. Setalvad" },
+      { "cat": "Elections", "title": "First Chief Election Commissioner", "name": "Sukumar Sen", "date": "1950-03-21", "wiki": "Sukumar Sen (civil servant)" },
+      { "cat": "Elections", "title": "First general election", "name": "1951–52 general election", "date": "1951-10-25", "wiki": "1951–52 Indian general election" },
+      { "cat": "Legislature", "title": "First Speaker of the Lok Sabha", "name": "G. V. Mavalankar", "date": "1952-05-15", "wiki": "Ganesh Vasudev Mavalankar" },
+      { "cat": "Civil Service", "title": "First Indian to join the Indian Civil Service (ICS)", "name": "Satyendranath Tagore", "date": "1864", "wiki": "Satyendranath Tagore" },
+      { "cat": "Civil Service", "title": "First woman IAS officer", "name": "Anna Rajam Malhotra", "date": "1951", "wiki": "Anna Rajam Malhotra" },
+      { "cat": "Civil Service", "title": "First woman IPS officer", "name": "Kiran Bedi", "date": "1972", "wiki": "Kiran Bedi" },
+      { "cat": "Defence", "title": "First Indian Commander-in-Chief of the Army", "name": "K. M. Cariappa", "date": "1949-01-15", "wiki": "K. M. Cariappa" },
+      { "cat": "Defence", "title": "First Field Marshal", "name": "Sam Manekshaw", "date": "1973-01-01", "wiki": "Sam Manekshaw" },
+      { "cat": "Defence", "title": "First Chief of Defence Staff", "name": "Bipin Rawat", "date": "2020-01-01", "wiki": "Bipin Rawat" },
+      { "cat": "Women in power", "title": "First woman Governor of a state", "name": "Sarojini Naidu", "date": "1947-08-15", "wiki": "Sarojini Naidu" },
+      { "cat": "Women in power", "title": "First woman Chief Minister", "name": "Sucheta Kripalani", "date": "1963-10-02", "wiki": "Sucheta Kripalani" },
+      { "cat": "Women in power", "title": "First woman Prime Minister", "name": "Indira Gandhi", "date": "1966-01-24", "wiki": "Indira Gandhi" },
+      { "cat": "Women in power", "title": "First woman President", "name": "Pratibha Patil", "date": "2007-07-25", "wiki": "Pratibha Patil" },
+      { "cat": "Women in power", "title": "First woman Speaker of the Lok Sabha", "name": "Meira Kumar", "date": "2009-06-03", "wiki": "Meira Kumar" },
+      { "cat": "Representation", "title": "First Muslim President", "name": "Zakir Husain", "date": "1967-05-13", "wiki": "Zakir Husain (politician)" },
+      { "cat": "Representation", "title": "First non-Congress Prime Minister", "name": "Morarji Desai", "date": "1977-03-24", "wiki": "Morarji Desai" },
+      { "cat": "Representation", "title": "First Dalit President", "name": "K. R. Narayanan", "date": "1997-07-25", "wiki": "K. R. Narayanan" },
+      { "cat": "Representation", "title": "First Sikh Prime Minister", "name": "Manmohan Singh", "date": "2004-05-22", "wiki": "Manmohan Singh" },
+      { "cat": "Representation", "title": "First tribal (Adivasi) President", "name": "Droupadi Murmu", "date": "2022-07-25", "wiki": "Droupadi Murmu" },
+      { "cat": "Honours & science", "title": "First Indian Nobel laureate (Literature)", "name": "Rabindranath Tagore", "date": "1913", "wiki": "Rabindranath Tagore" },
+      { "cat": "Honours & science", "title": "First Indian in space", "name": "Rakesh Sharma", "date": "1984-04-03", "wiki": "Rakesh Sharma" }
+    ],
+    "milestones": [
+      { "date": "1947-08-15", "title": "Independence and Partition", "text": "British rule ends; British India is partitioned into the dominions of India and Pakistan.", "wiki": "Partition of India" },
+      { "date": "1950-01-26", "title": "India becomes a republic", "text": "The Constitution comes into force; Rajendra Prasad becomes the first President.", "wiki": "Republic Day (India)" },
+      { "date": "1951-10-25", "title": "First general election", "text": "The world's largest democratic exercise at the time, held over 1951–52.", "wiki": "1951–52 Indian general election" },
+      { "date": "1956-11-01", "title": "States reorganised on linguistic lines", "text": "The States Reorganisation Act redraws state boundaries.", "wiki": "States Reorganisation Act, 1956" },
+      { "date": "1962-10-20", "title": "Sino-Indian War", "text": "Border war with China.", "wiki": "Sino-Indian War" },
+      { "date": "1965-08-05", "title": "Indo-Pakistani War of 1965", "text": "Ends with the Tashkent Declaration in January 1966.", "wiki": "Indo-Pakistani war of 1965" },
+      { "date": "1969-07-19", "title": "Bank nationalisation", "text": "Fourteen major commercial banks are nationalised.", "wiki": "Banking in India" },
+      { "date": "1971-12-16", "title": "1971 war and creation of Bangladesh", "text": "Pakistan's eastern wing becomes independent Bangladesh.", "wiki": "Indo-Pakistani war of 1971" },
+      { "date": "1974-05-18", "title": "First nuclear test (Smiling Buddha)", "text": "India conducts its first nuclear test at Pokhran.", "wiki": "Smiling Buddha" },
+      { "date": "1975-06-25", "title": "The Emergency (1975–77)", "text": "A 21-month state of emergency suspends elections and civil liberties.", "wiki": "The Emergency (India)" },
+      { "date": "1977-03-24", "title": "First non-Congress government", "text": "The Janata Party wins; Morarji Desai becomes Prime Minister.", "wiki": "1977 Indian general election" },
+      { "date": "1984-10-31", "title": "Assassination of Indira Gandhi", "text": "Rajiv Gandhi becomes Prime Minister.", "wiki": "Assassination of Indira Gandhi" },
+      { "date": "1991-07-24", "title": "Economic liberalisation", "text": "Narasimha Rao's government and Finance Minister Manmohan Singh open up the economy.", "wiki": "Economic liberalisation in India" },
+      { "date": "1998-05-11", "title": "Pokhran-II nuclear tests", "text": "India declares itself a nuclear-weapon state.", "wiki": "Pokhran-II" },
+      { "date": "2005-10-12", "title": "Right to Information Act", "text": "Citizens gain a legal right to request government information.", "wiki": "Right to Information Act, 2005" },
+      { "date": "2014-05-26", "title": "Narendra Modi becomes Prime Minister", "text": "First single-party majority in the Lok Sabha since 1984.", "wiki": "2014 Indian general election" },
+      { "date": "2017-07-01", "title": "Goods and Services Tax (GST)", "text": "A nationwide indirect tax replaces many central and state levies.", "wiki": "Goods and Services Tax (India)" },
+      { "date": "2019-08-05", "title": "Article 370 revoked", "text": "The special status of Jammu and Kashmir ends.", "wiki": "Revocation of the special status of Jammu and Kashmir" },
+      { "date": "2023-08-23", "title": "Chandrayaan-3 lands near the lunar south pole", "text": "India becomes the first country to land near the Moon's south pole.", "wiki": "Chandrayaan-3" }
+    ]
+  },
+  "USA": {
+    "firsts": [
+      { "cat": "Founding", "title": "Declaration of Independence", "date": "1776-07-04", "wiki": "United States Declaration of Independence", "name": "Declaration of Independence" },
+      { "cat": "Founding", "title": "Constitution takes effect", "date": "1789-03-04", "wiki": "Constitution of the United States", "name": "U.S. Constitution" },
+      { "cat": "Executive", "title": "First President", "name": "George Washington", "date": "1789-04-30", "wiki": "George Washington" },
+      { "cat": "Executive", "title": "First Vice President", "name": "John Adams", "date": "1789-04-21", "wiki": "John Adams" },
+      { "cat": "Executive", "title": "First Secretary of State", "name": "Thomas Jefferson", "date": "1790-03-22", "wiki": "Thomas Jefferson" },
+      { "cat": "Executive", "title": "First Secretary of the Treasury", "name": "Alexander Hamilton", "date": "1789-09-11", "wiki": "Alexander Hamilton" },
+      { "cat": "Judiciary", "title": "First Chief Justice", "name": "John Jay", "date": "1789-10-19", "wiki": "John Jay" },
+      { "cat": "Judiciary", "title": "First African American Supreme Court Justice", "name": "Thurgood Marshall", "date": "1967-10-02", "wiki": "Thurgood Marshall" },
+      { "cat": "Judiciary", "title": "First woman Supreme Court Justice", "name": "Sandra Day O'Connor", "date": "1981-09-25", "wiki": "Sandra Day O'Connor" },
+      { "cat": "Representation", "title": "First Catholic President", "name": "John F. Kennedy", "date": "1961-01-20", "wiki": "John F. Kennedy" },
+      { "cat": "Representation", "title": "First African American President", "name": "Barack Obama", "date": "2009-01-20", "wiki": "Barack Obama" },
+      { "cat": "Women in power", "title": "First woman elected to Congress", "name": "Jeannette Rankin", "date": "1917-03-04", "wiki": "Jeannette Rankin" },
+      { "cat": "Women in power", "title": "First woman Speaker of the House", "name": "Nancy Pelosi", "date": "2007-01-04", "wiki": "Nancy Pelosi" },
+      { "cat": "Women in power", "title": "First woman Vice President", "name": "Kamala Harris", "date": "2021-01-20", "wiki": "Kamala Harris" }
+    ],
+    "milestones": [
+      { "date": "1776-07-04", "title": "Independence declared", "text": "Thirteen colonies declare independence from Great Britain.", "wiki": "United States Declaration of Independence" },
+      { "date": "1789-03-04", "title": "Constitution in force", "text": "The federal government under the Constitution begins operating.", "wiki": "Constitution of the United States" },
+      { "date": "1865-12-06", "title": "Slavery abolished", "text": "The 13th Amendment is ratified after the Civil War.", "wiki": "Thirteenth Amendment to the United States Constitution" },
+      { "date": "1920-08-18", "title": "Women's suffrage", "text": "The 19th Amendment guarantees women the right to vote.", "wiki": "Nineteenth Amendment to the United States Constitution" },
+      { "date": "1964-07-02", "title": "Civil Rights Act", "text": "Outlaws discrimination based on race, colour, religion, sex or national origin.", "wiki": "Civil Rights Act of 1964" }
+    ]
+  },
+  "GBR": {
+    "firsts": [
+      { "cat": "Executive", "title": "First (de facto) Prime Minister", "name": "Robert Walpole", "date": "1721-04-03", "wiki": "Robert Walpole" },
+      { "cat": "Women in power", "title": "First woman to take her seat as an MP", "name": "Nancy Astor", "date": "1919-12-01", "wiki": "Nancy Astor" },
+      { "cat": "Women in power", "title": "First woman Prime Minister", "name": "Margaret Thatcher", "date": "1979-05-04", "wiki": "Margaret Thatcher" },
+      { "cat": "Representation", "title": "First British Asian and Hindu Prime Minister", "name": "Rishi Sunak", "date": "2022-10-25", "wiki": "Rishi Sunak" }
+    ],
+    "milestones": [
+      { "date": "1215-06-15", "title": "Magna Carta", "text": "Limits royal power; a foundation of constitutional law.", "wiki": "Magna Carta" },
+      { "date": "1707-05-01", "title": "Acts of Union", "text": "England and Scotland unite as the Kingdom of Great Britain.", "wiki": "Acts of Union 1707" },
+      { "date": "1832-06-07", "title": "Great Reform Act", "text": "Expands the electorate and reforms constituencies.", "wiki": "Reform Act 1832" },
+      { "date": "1928-07-02", "title": "Equal suffrage", "text": "Women gain the vote on equal terms with men.", "wiki": "Representation of the People (Equal Franchise) Act 1928" },
+      { "date": "2020-01-31", "title": "Brexit", "text": "The UK leaves the European Union.", "wiki": "Brexit" }
+    ]
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "world-governance-atlas",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Leaders, history, firsts and public data for every country, auto-updated from Wikidata, Wikipedia and the World Bank.",
+  "type": "module",
+  "scripts": {
+    "update-data": "node scripts/fetch-data.mjs",
+    "update-data:quick": "ONLY=IND,USA,GBR,CHN node scripts/fetch-data.mjs",
+    "start": "python3 -m http.server 8080"
+  },
+  "engines": { "node": ">=20" }
+}
