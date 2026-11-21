@@ -98,15 +98,18 @@ const flag = (c, cls = '') => (c?.flag ? `<img class="flag ${cls}" src="${esc(c.
 const wikiUrl = (t) => `https://en.wikipedia.org/wiki/${encodeURIComponent(String(t).replace(/ /g, '_'))}`;
 const ext = (href, text) => `<a href="${esc(href)}" target="_blank" rel="noopener">${esc(text)}</a>`;
 
+// Views are plain hash names (letters, digits, hyphens) so links work inside Claude artifacts too:
+// #country-IND-leaders, #leader-Q1047, #compare-IND-CHN-USA-pm25, #rankings-pm25-IND
 function parseHash() {
-  const raw = location.hash.replace(/^#\/?/, '');
-  const [p, q] = raw.split('?');
-  return { parts: p.split('/').filter(Boolean).map(decodeURIComponent), query: new URLSearchParams(q || '') };
+  const parts = location.hash.replace(/^#\/?/, '').split(/[-/]/).filter(Boolean).map(decodeURIComponent);
+  if (parts[0] === 'home') parts.shift();
+  return { parts };
 }
-function setQuery(path, params) {
-  const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v != null && v !== '')).toString();
-  history.replaceState(null, '', `#/${path}${q ? '?' + q : ''}`);
+function setHash(name) {
+  try { history.replaceState(null, '', `#${name}`); } catch (e) {}
 }
+const isIso = (x) => /^[A-Z]{3}$/.test(x);
+const uiState = { countries: { q: '', continent: '', sort: 'name' } };
 
 /* rank helpers */
 function rankOf(iso3, key) {
@@ -118,14 +121,14 @@ function rankOf(iso3, key) {
 }
 
 /* ================================================================== router */
-const routes = { '': home, countries, country, leader, compare, rankings, about };
+const routes = { '': home, countries, country, leader, compare, rankings, sources: about, about };
 async function router() {
-  const { parts, query } = parseHash();
+  const { parts } = parseHash();
   const view = routes[parts[0] || ''] || notFound;
   $$('.nav a').forEach((a) => a.classList.toggle('active', a.dataset.nav === parts[0] || (parts[0] === 'country' && a.dataset.nav === 'countries')));
   try {
     await loadIndex();
-    await view(parts.slice(1), query);
+    await view(parts.slice(1));
   } catch (e) {
     console.error(e);
     app.innerHTML = `<div class="empty">Couldn't load this page. ${esc(e.message)}</div>`;
@@ -136,7 +139,7 @@ async function router() {
 window.addEventListener('hashchange', router);
 
 function notFound() {
-  app.innerHTML = `<div class="empty"><h2>Page not found</h2><p><a href="#/">Back to the atlas</a></p></div>`;
+  app.innerHTML = `<div class="empty"><h2>Page not found</h2><p><a href="#home">Back to the atlas</a></p></div>`;
 }
 
 /* ================================================================== home */
@@ -155,9 +158,9 @@ async function home() {
         <h1>Who has governed the world, <em>and how it's going.</em></h1>
         <p class="lede">Every head of state and government since each country's founding, with history, firsts and public indicators: governance, crime, air quality, economy and health. You can compare any country with any other.</p>
         <div class="hero-actions">
-          <a class="btn primary" href="#/country/IND">Start with India →</a>
-          <a class="btn" href="#/compare?c=IND,CHN,USA">Compare countries</a>
-          <a class="btn" href="#/rankings?i=pm25">Air quality ranking</a>
+          <a class="btn primary" href="#country-IND">Start with India →</a>
+          <a class="btn" href="#compare-IND-CHN-USA">Compare countries</a>
+          <a class="btn" href="#rankings-pm25">Air quality ranking</a>
         </div>
       </div>
       <div class="hero-stats">
@@ -174,8 +177,8 @@ async function home() {
           <div class="eyebrow">Featured · India since 1947</div>
           <h2>Prime Ministers of India</h2>
           <p class="muted">From Jawaharlal Nehru on Independence Day 1947 to the present, with every term, tenure and party.</p>
-          <a class="btn" href="#/country/IND/leaders">Full timeline</a>
-          <a class="btn" href="#/country/IND/firsts" style="margin-top:8px">India's firsts</a>
+          <a class="btn" href="#country-IND-leaders">Full timeline</a>
+          <a class="btn" href="#country-IND-firsts" style="margin-top:8px">India's firsts</a>
         </div>
         <div class="strip" id="india-strip"><div class="skeleton" style="height:150px;flex:1"></div></div>
       </div>
@@ -187,7 +190,7 @@ async function home() {
     </section>
 
     <section class="section">
-      <div class="section-head"><h2>At a glance</h2><a href="#/rankings">All rankings →</a></div>
+      <div class="section-head"><h2>At a glance</h2><a href="#rankings">All rankings →</a></div>
       <div class="grid g3">
         ${miniRank('pm25', 'Most polluted air', 'desc')}
         ${miniRank('homicide', 'Highest homicide rate', 'desc')}
@@ -203,7 +206,7 @@ async function home() {
     const pms = ind.terms.filter((t) => t.roles.includes('hog'));
     $('#india-strip').innerHTML = pms.map((t, i) => {
       const p = ind.people[t.person];
-      return `<a class="strip-item" href="#/leader/${t.person}">${avatar(p)}<div class="no">#${i + 1}</div><div class="n">${esc(p.name)}</div><div class="y">${year(t.start)}–${t.end ? year(t.end) : 'now'}</div></a>`;
+      return `<a class="strip-item" href="#leader-${t.person}">${avatar(p)}<div class="no">#${i + 1}</div><div class="n">${esc(p.name)}</div><div class="y">${year(t.start)}–${t.end ? year(t.end) : 'now'}</div></a>`;
     }).join('');
     const strip = $('#india-strip');
     strip.scrollLeft = strip.scrollWidth;
@@ -213,7 +216,7 @@ async function home() {
 function leaderCard(c) {
   const p = c.hog || c.hos;
   if (!p) return '';
-  return `<a class="leader-card" href="#/leader/${p.id}">${avatar(p)}<div><div class="t">${esc(c.hog ? c.hogTitle : c.hosTitle)}</div><div class="n">${esc(p.name)}</div><div class="c">${flag(c)}${esc(c.name)}</div></div></a>`;
+  return `<a class="leader-card" href="#leader-${p.id}">${avatar(p)}<div><div class="t">${esc(c.hog ? c.hogTitle : c.hosTitle)}</div><div class="n">${esc(p.name)}</div><div class="c">${flag(c)}${esc(c.name)}</div></div></a>`;
 }
 
 function miniRank(key, title, dir) {
@@ -224,17 +227,15 @@ function miniRank(key, title, dir) {
   rows.sort((a, b) => (desc ? b.latest[key][1] - a.latest[key][1] : a.latest[key][1] - b.latest[key][1]));
   rows = rows.slice(0, 5);
   return `<div class="card rank-card"><h3>${esc(title)}</h3><div class="sub">${esc(ind.label)}</div>
-    <ol class="mini-rank">${rows.map((c, i) => `<li><span class="r">${i + 1}</span>${flag(c)}<a href="#/country/${c.iso3}">${esc(c.name)}</a><span class="num">${fmtValue(c.latest[key][1], ind.unit)}</span></li>`).join('')}</ol>
-    <a class="note" href="#/rankings?i=${key}">See all ${state.index.countries.filter((c) => c.latest[key]).length} →</a></div>`;
+    <ol class="mini-rank">${rows.map((c, i) => `<li><span class="r">${i + 1}</span>${flag(c)}<a href="#country-${c.iso3}">${esc(c.name)}</a><span class="num">${fmtValue(c.latest[key][1], ind.unit)}</span></li>`).join('')}</ol>
+    <a class="note" href="#rankings-${key}">See all ${state.index.countries.filter((c) => c.latest[key]).length} →</a></div>`;
 }
 
 /* ================================================================== countries */
-async function countries(_, query) {
+async function countries() {
   document.title = 'Countries — World Governance Atlas';
   const conts = [...new Set(state.index.countries.flatMap((c) => c.continent))].filter(Boolean).sort();
-  const cont = query.get('continent') || '';
-  const sort = query.get('sort') || 'name';
-  const q = query.get('q') || '';
+  const { continent: cont, sort, q } = uiState.countries;
   app.innerHTML = `
     <div class="section-head"><div><h1>Countries</h1><p class="muted" style="margin-top:6px">${state.index.countries.length} sovereign states with their current leaders and key numbers.</p></div></div>
     <div class="toolbar">
@@ -249,7 +250,7 @@ async function countries(_, query) {
     const qv = $('#cq').value.trim().toLowerCase();
     const cv = $('#cc').value;
     const sv = $('#cs').value;
-    setQuery('countries', { q: qv, continent: cv, sort: sv === 'name' ? '' : sv });
+    uiState.countries = { q: qv, continent: cv, sort: sv };
     let list = state.index.countries.filter((c) => (!cv || c.continent.includes(cv)) && (!qv || c.name.toLowerCase().includes(qv) || (c.capital || '').toLowerCase().includes(qv)));
     const v = (c) => (sv === 'leaders' ? c.leaders : sv === 'inception' ? -(parseD(c.inception)?.y ?? 9999) : c.latest[sv]?.[1] ?? -Infinity);
     if (sv !== 'name') list = [...list].sort((a, b) => v(b) - v(a));
@@ -264,7 +265,7 @@ async function countries(_, query) {
 function countryCard(c) {
   const person = (p, role) => (p ? `<div class="person">${avatar(p)}<div><span class="role">${esc(role || '')}</span>${esc(p.name)}</div></div>` : '');
   const same = c.hog && c.hos && c.hog.id === c.hos.id;
-  return `<a class="country-card" href="#/country/${c.iso3}">
+  return `<a class="country-card" href="#country-${c.iso3}">
     <div class="top">${flag(c)}<div><div class="name">${esc(c.name)}</div><div class="cap">${esc(c.capital || '')}${c.inception ? ` · since ${year(c.inception)}` : ''}</div></div></div>
     <div class="people">${person(c.hog, c.hogTitle)}${same ? '' : person(c.hos, c.hosTitle)}</div>
     <div class="kv"><span><b>${fmtValue(c.latest.population?.[1], 'people')}</b>people</span><span><b>${fmtValue(c.latest.gdp?.[1], 'usd')}</b>GDP</span><span><b>${c.leaders}</b>leaders</span></div>
@@ -281,7 +282,7 @@ async function country([iso3, tab = 'overview']) {
   document.title = `${c.name} — leaders, history & data · World Governance Atlas`;
   const tabs = [['overview', 'Overview'], ['leaders', 'Leaders'], ['firsts', 'Firsts'], ['history', 'History'], ['data', 'Data & trends']];
   app.innerHTML = `
-    <div class="crumbs"><a href="#/countries">Countries</a> / ${esc(c.continent.join(', '))}</div>
+    <div class="crumbs"><a href="#countries">Countries</a> / ${esc(c.continent.join(', '))}</div>
     <div class="country-head">
       ${flag(c, 'lg')}
       <div>
@@ -293,11 +294,11 @@ async function country([iso3, tab = 'overview']) {
         </div>
       </div>
       <div class="actions">
-        <a class="btn" href="#/compare?c=${c.iso3}${c.iso3 === 'IND' ? ',CHN,USA' : ',IND'}">Compare</a>
+        <a class="btn" href="#compare-${c.iso3}${c.iso3 === 'IND' ? '-CHN-USA' : '-IND'}">Compare</a>
         ${c.website ? `<a class="btn" href="${esc(c.website)}" target="_blank" rel="noopener">Official portal ↗</a>` : ''}
       </div>
     </div>
-    <nav class="tabs">${tabs.map(([k, l]) => `<a href="#/country/${c.iso3}/${k}" class="${k === tab ? 'on' : ''}">${l}</a>`).join('')}</nav>
+    <nav class="tabs">${tabs.map(([k, l]) => `<a href="#country-${c.iso3}-${k}" class="${k === tab ? 'on' : ''}">${l}</a>`).join('')}</nav>
     <div id="tab"></div>`;
   const el = $('#tab');
   ({ overview: countryOverview, leaders: countryLeaders, firsts: countryFirsts, history: countryHistory, data: countryData }[tab] || countryOverview)(c, el);
@@ -316,7 +317,7 @@ function tiles(c, keys) {
     if (!ind || !s?.length) return '';
     const [yr, v] = s[s.length - 1];
     const r = rankOf(c.iso3, k);
-    return `<a class="tile" href="#/rankings?i=${k}&hl=${c.iso3}" style="color:inherit;text-decoration:none">
+    return `<a class="tile" href="#rankings-${k}-${c.iso3}" style="color:inherit;text-decoration:none">
       <span class="l">${esc(ind.label)}</span>
       <span class="v">${fmtValue(v, ind.unit)}</span>
       <span class="f"><span>${yr}${r ? ` · #${r.rank} of ${r.of}` : ''}</span>${sparkline(s)}</span>
@@ -332,7 +333,7 @@ function countryOverview(c, el) {
   const nowCard = (p, role) => {
     if (!p) return '';
     const t = termOf(p.id, role);
-    return `<a class="now-card" href="#/leader/${p.id}">${avatar(p, 'lg')}<div><div class="t">${esc(office(role))}</div><div class="n">${esc(p.name)}</div><div class="s">${t?.start ? `Since ${fmtDate(t.start)} · ${fmtDuration(daysBetween(t.start, TODAY))}` : ''}</div><div class="s">${esc(p.parties[0] || '')}</div></div></a>`;
+    return `<a class="now-card" href="#leader-${p.id}">${avatar(p, 'lg')}<div><div class="t">${esc(office(role))}</div><div class="n">${esc(p.name)}</div><div class="s">${t?.start ? `Since ${fmtDate(t.start)} · ${fmtDuration(daysBetween(t.start, TODAY))}` : ''}</div><div class="s">${esc(p.parties[0] || '')}</div></div></a>`;
   };
   el.innerHTML = `
     <div class="overview">
@@ -342,7 +343,7 @@ function countryOverview(c, el) {
         </div>
         <div class="prose">${paragraphs(c.summary, 3) || '<p class="muted">No summary available.</p>'}</div>
         <p class="src">Summary from ${ext(wikiUrl(c.wiki), 'Wikipedia')} (CC BY-SA).</p>
-        <div class="section-head" style="margin-top:28px"><h2>Key numbers</h2><a href="#/country/${c.iso3}/data">All ${Object.keys(c.indicators).length} indicators →</a></div>
+        <div class="section-head" style="margin-top:28px"><h2>Key numbers</h2><a href="#country-${c.iso3}-data">All ${Object.keys(c.indicators).length} indicators →</a></div>
         <div class="tiles">${tiles(c, KEY_TILES)}</div>
       </div>
       <aside class="grid">
@@ -442,15 +443,15 @@ function countryLeaders(c, el) {
         const d = daysBetween(t.start, t.end || TODAY);
         const a = age(p.born, t.start);
         return `<li class="${!t.end ? 'current' : ''}">
-          <a href="#/leader/${p.id}">${avatar(p)}</a>
+          <a href="#leader-${p.id}">${avatar(p)}</a>
           <div class="body"><div class="no">#${numbers.get(t.person)} · ${esc(c.offices.find((o) => o.id === t.office)?.title || '')}</div>
-            <a class="nm" href="#/leader/${p.id}">${esc(p.name)}</a>
+            <a class="nm" href="#leader-${p.id}">${esc(p.name)}</a>
             <div class="sub">${esc([p.parties[0], a ? `took office aged ${a}` : null].filter(Boolean).join(' · '))}</div></div>
           <div class="dur"><b>${fmtDuration(d)}</b>${fmtDate(t.start)} – ${t.end ? fmtDate(t.end) : 'present'}</div>
         </li>`;
       }).join('')}</ol>
       <p class="src">Terms from ${ext(`https://www.wikidata.org/wiki/${off[0]?.id}`, 'Wikidata')}. Acting and caretaker terms are included where Wikidata records them.</p>`;
-    $$('.era span').forEach((s) => s.addEventListener('click', () => (location.hash = `#/leader/${s.dataset.id}`)));
+    $$('.era span').forEach((s) => s.addEventListener('click', () => (location.hash = `#leader-${s.dataset.id}`)));
   };
   el.innerHTML = `<div class="toolbar">
       ${hasBoth ? `<div class="seg" id="role"><button data-r="hog" class="${role === 'hog' ? 'on' : ''}">Head of government</button><button data-r="hos" class="${role === 'hos' ? 'on' : ''}">Head of state</button></div>` : ''}
@@ -505,7 +506,7 @@ function countryFirsts(c, el) {
         </a>`).join('')}</div>`).join('') : `<div class="card note">No hand-curated firsts for ${esc(c.name)} yet. The records below are computed automatically from office-holder data. Curated entries live in <code>curated/firsts.json</code>.</div>`}
     <div class="cat-head"><h3>From the office-holder records</h3><span class="pill">Computed automatically</span></div>
     <div class="grid g3">${auto.map((f) => `
-      <a class="first" href="#/leader/${f.p.id}">${avatar(f.p)}
+      <a class="first" href="#leader-${f.p.id}">${avatar(f.p)}
         <div><div class="ti">${esc(f.title)}</div><div class="nm">${esc(f.p.name)}</div><div class="dt">${esc([f.date && fmtDate(f.date), f.extra].filter(Boolean).join(' · '))}</div></div>
       </a>`).join('') || '<div class="empty">No records</div>'}</div>
     <p class="src">Curated entries link to Wikipedia. Computed entries use Wikidata gender, birth and term data, and are only as complete as those records.</p>`;
@@ -532,7 +533,7 @@ function countryHistory(c, el) {
           ${fact('Government', c.government.join(', '))}
           ${fact('Leaders on record', `${new Set(c.terms.map((t) => t.person)).size}`)}
         </dl>
-        <a class="btn" style="margin-top:12px" href="#/country/${c.iso3}/leaders">Leaders timeline</a>
+        <a class="btn" style="margin-top:12px" href="#country-${c.iso3}-leaders">Leaders timeline</a>
       </aside>
     </div>`;
 }
@@ -551,7 +552,7 @@ function countryData(c, el) {
           <div class="big">${fmtValue(s[s.length - 1][1], i.unit)}</div>
           <div class="sub">${s[s.length - 1][0]}${r ? ` · ranked ${r.rank} of ${r.of} (${i.better === 'low' ? 'lower is better' : i.better === 'high' ? 'higher is better' : 'by value'})` : ''}</div>
           <div data-chart="${i.key}"></div>
-          <div class="src"><a href="#/compare?c=${c.iso3}&i=${i.key}">Compare</a> · <a href="#/rankings?i=${i.key}&hl=${c.iso3}">Ranking</a> · ${ext(`https://data.worldbank.org/indicator/${i.id}?locations=${c.iso2}`, 'World Bank ↗')}</div></div>`;
+          <div class="src"><a href="#compare-${c.iso3}-${i.key}">Compare</a> · <a href="#rankings-${i.key}-${c.iso3}">Ranking</a> · ${ext(`https://data.worldbank.org/indicator/${i.id}?locations=${c.iso2}`, 'World Bank ↗')}</div></div>`;
       }).join('')}</div>`;
   }).join('') || '<div class="empty">No indicator data available.</div>';
   requestAnimationFrame(() => $$('[data-chart]', el).forEach((n) => {
@@ -579,7 +580,7 @@ async function leader([id]) {
   const totalDays = offices.reduce((s, o) => s + (o.t.start ? daysBetween(o.t.start, o.t.end || TODAY) : 0), 0);
   const firstStart = offices.find((o) => o.t.start)?.t.start;
   app.innerHTML = `
-    <div class="crumbs"><a href="#/country/${cs[0].iso3}/leaders">${esc(cs[0].name)}: leaders</a></div>
+    <div class="crumbs"><a href="#country-${cs[0].iso3}-leaders">${esc(cs[0].name)}: leaders</a></div>
     <div class="profile">
       <div>${avatar(p, 'xl')}</div>
       <div>
@@ -594,7 +595,7 @@ async function leader([id]) {
         <div class="card" style="margin-bottom:20px">
           <h3 style="margin-bottom:6px">Offices held</h3>
           <ul class="office-list">${offices.map((o) => `<li>${flag(o.c)}<div><div class="o">${esc(o.title)}</div><div class="d">${fmtDate(o.t.start)} – ${o.t.end ? fmtDate(o.t.end) : 'present'} · ${fmtDuration(o.t.start ? daysBetween(o.t.start, o.t.end || TODAY) : null)}</div></div>
-            <div class="nav2">${o.prev ? `← <a href="#/leader/${o.prev.id}">${esc(o.prev.name)}</a>` : ''}${o.prev && o.next ? '<br>' : ''}${o.next ? `<a href="#/leader/${o.next.id}">${esc(o.next.name)}</a> →` : ''}</div></li>`).join('')}</ul>
+            <div class="nav2">${o.prev ? `← <a href="#leader-${o.prev.id}">${esc(o.prev.name)}</a>` : ''}${o.prev && o.next ? '<br>' : ''}${o.next ? `<a href="#leader-${o.next.id}">${esc(o.next.name)}</a> →` : ''}</div></li>`).join('')}</ul>
         </div>
         <div class="grid g2" style="margin-bottom:20px">
           ${p.parties.length ? `<div class="card"><div class="eyebrow">Political parties</div><p style="margin-top:6px">${p.parties.map(esc).join(' · ')}</p></div>` : ''}
@@ -617,10 +618,11 @@ async function leader([id]) {
 }
 
 /* ================================================================== compare */
-async function compare(_, query) {
+async function compare(args) {
   document.title = 'Compare countries — World Governance Atlas';
-  let sel = (query.get('c') || 'IND,CHN,USA').split(',').map((s) => s.toUpperCase()).filter((s) => state.byIso.has(s)).slice(0, 4);
-  let key = query.get('i') || 'gdpPerCapita';
+  let sel = args.filter(isIso).filter((s) => state.byIso.has(s)).slice(0, 4);
+  if (!sel.length) sel = ['IND', 'CHN', 'USA'];
+  let key = args.find((a) => state.ind.has(a)) || 'gdpPerCapita';
   app.innerHTML = `
     <div class="section-head"><div><h1>Compare countries</h1><p class="muted" style="margin-top:6px">Pick up to four countries. The best value in each row is marked ▲.</p></div></div>
     <div class="toolbar"><div class="chips" id="chips"></div>
@@ -632,7 +634,7 @@ async function compare(_, query) {
     <div id="leaders" class="grid g4" style="margin-bottom:20px"></div>
     <div class="table-wrap" id="ctable"></div>`;
   const draw = async () => {
-    setQuery('compare', { c: sel.join(','), i: key });
+    setHash(['compare', ...sel, key].join('-'));
     const data = await Promise.all(sel.map(loadCountry));
     $('#chips').innerHTML = data.map((c, i) => `<span class="chip"><span class="sw" style="background:${SERIES[i]}"></span>${flag(c)}${esc(c.name)}<button data-x="${c.iso3}" aria-label="Remove ${esc(c.name)}">×</button></span>`).join('');
     $$('#chips button').forEach((b) => b.addEventListener('click', () => { sel = sel.filter((s) => s !== b.dataset.x); draw(); }));
@@ -675,10 +677,10 @@ function groupedOptions(selected) {
 }
 
 /* ================================================================== rankings */
-async function rankings(_, query) {
+async function rankings(args) {
   document.title = 'Rankings — World Governance Atlas';
-  let key = query.get('i') || 'corruptionControl';
-  const hl = query.get('hl') || '';
+  let key = args.find((a) => state.ind.has(a)) || 'corruptionControl';
+  const hl = args.find(isIso) || '';
   app.innerHTML = `
     <div class="section-head"><div><h1>World rankings</h1><p class="muted" style="margin-top:6px">Every country ranked on its latest reported value.</p></div></div>
     <div class="toolbar">
@@ -689,7 +691,7 @@ async function rankings(_, query) {
     <div class="card"><div class="note" id="rnote" style="margin-bottom:10px"></div><ol class="bars" id="rlist"></ol></div>`;
   let dir = 'best';
   const draw = () => {
-    setQuery('rankings', { i: key, hl });
+    setHash(['rankings', key, hl].filter(Boolean).join('-'));
     const ind = state.ind.get(key);
     let rows = state.index.countries.filter((c) => c.latest[key]);
     const asc = (ind.better === 'low') === (dir === 'best');
@@ -700,7 +702,7 @@ async function rankings(_, query) {
     $('#rlist').innerHTML = rows.map((c, i) => {
       const [yr, v] = c.latest[key];
       const show = !q || c.name.toLowerCase().includes(q);
-      return `<li class="${c.iso3 === hl ? 'hl' : ''}" ${show ? '' : 'hidden'} id="r-${c.iso3}"><span class="r">${i + 1}</span>${flag(c)}<a href="#/country/${c.iso3}">${esc(c.name)}</a><span class="track"><span class="bar" style="width:${(Math.abs(v) / max) * 100}%"></span></span><span class="v">${fmtValue(v, ind.unit)}<small>${yr}</small></span></li>`;
+      return `<li class="${c.iso3 === hl ? 'hl' : ''}" ${show ? '' : 'hidden'} id="r-${c.iso3}"><span class="r">${i + 1}</span>${flag(c)}<a href="#country-${c.iso3}">${esc(c.name)}</a><span class="track"><span class="bar" style="width:${(Math.abs(v) / max) * 100}%"></span></span><span class="v">${fmtValue(v, ind.unit)}<small>${yr}</small></span></li>`;
     }).join('');
     if (hl) $(`#r-${hl}`)?.scrollIntoView({ block: 'center' });
   };
@@ -756,8 +758,8 @@ function initSearch() {
     const cs = state.index.countries.filter((c) => c.name.toLowerCase().includes(q) || c.iso3.toLowerCase() === q).slice(0, 6);
     const norm = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
     const ps = Object.entries(people).filter(([, p]) => norm(p.n).includes(norm(q))).sort((a, b) => norm(a[1].n).indexOf(norm(q)) - norm(b[1].n).indexOf(norm(q))).slice(0, 8);
-    box.innerHTML = (cs.length ? `<div class="sr-head">Countries</div>${cs.map((c) => `<a href="#/country/${c.iso3}">${flag(c)}${esc(c.name)}<span class="kind">${esc(c.capital || '')}</span></a>`).join('')}` : '')
-      + (ps.length ? `<div class="sr-head">Leaders</div>${ps.map(([id, p]) => `<a href="#/leader/${id}">${esc(p.n)}<span class="kind">${esc(p.c.map((x) => state.byIso.get(x)?.name).filter(Boolean).slice(0, 2).join(', '))}</span></a>`).join('')}` : '')
+    box.innerHTML = (cs.length ? `<div class="sr-head">Countries</div>${cs.map((c) => `<a href="#country-${c.iso3}">${flag(c)}${esc(c.name)}<span class="kind">${esc(c.capital || '')}</span></a>`).join('')}` : '')
+      + (ps.length ? `<div class="sr-head">Leaders</div>${ps.map(([id, p]) => `<a href="#leader-${id}">${esc(p.n)}<span class="kind">${esc(p.c.map((x) => state.byIso.get(x)?.name).filter(Boolean).slice(0, 2).join(', '))}</span></a>`).join('')}` : '')
       || '<div class="sr-head">No matches</div>';
     box.hidden = false;
     sel = -1;

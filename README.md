@@ -9,15 +9,20 @@ Leaders, history, "firsts" and public data for every sovereign state, rebuilt au
 - **Live air quality** (US AQI, PM2.5, PM10, NO₂, O₃) for each capital.
 - **Compare** up to four countries, and **rank** all countries on any indicator.
 
-## Run locally
+## Run it on your computer
+
+Needs [Node.js](https://nodejs.org) 20 or newer. Nothing else to install.
 
 ```bash
-npm run update-data         # full refresh, ~15–30 min (Wikimedia rate limits)
-npm run update-data:quick   # India, USA, UK, China only
-npm start                   # http://localhost:8080
+cd world-governance
+node scripts/serve.mjs
 ```
 
-No dependencies: Node ≥ 20 for the data script, any static file server for the site.
+Open http://localhost:8080. While that window stays open, the data refreshes itself every 24 hours (each refresh takes ~30 minutes; the site keeps working meanwhile). Leader biographies and air quality load live in the browser.
+
+- Refresh right now: `node scripts/fetch-data.mjs`
+- Different port: `PORT=3000 node scripts/serve.mjs` (Windows PowerShell: `$env:PORT=3000; node scripts/serve.mjs`)
+- Turn off the automatic refresh: `REFRESH_HOURS=0 node scripts/serve.mjs`
 
 ## How auto-update works
 

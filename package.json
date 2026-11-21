@@ -7,7 +7,7 @@
   "scripts": {
     "update-data": "node scripts/fetch-data.mjs",
     "update-data:quick": "ONLY=IND,USA,GBR,CHN node scripts/fetch-data.mjs",
-    "start": "python3 -m http.server 8080"
+    "start": "node scripts/serve.mjs"
   },
   "engines": { "node": ">=20" }
 }
