@@ -34,6 +34,10 @@ jobs:
         env:
           CONTACT: https://github.com/${{ github.repository }}
         run: node scripts/fetch-data.mjs
+      - name: Fetch India directory (Sansad, MyNeta)
+        if: github.event_name != 'push'
+        continue-on-error: true
+        run: node scripts/fetch-india.mjs
       - name: Commit refreshed data
         if: github.event_name != 'push'
         run: |
