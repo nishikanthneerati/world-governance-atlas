@@ -8,11 +8,25 @@
   const ini = (n) => esc((n || '?').split(/\s+/).filter((w) => /^[A-Za-z]/.test(w)).slice(0, 2).map((w) => w[0]).join('').toUpperCase());
   const face = (p, cls = 'avatar') => (p?.img ? `<img class="${cls}" src="${esc(p.img)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.outerHTML='<span class=&quot;${cls}&quot;>${ini(p.name)}</span>'">` : `<span class="${cls}">${ini(p?.name)}</span>`);
   const TYPE = { S: 'State', U: 'Union territory with legislature', X: 'Union territory' };
-  let ST = null, UN = null;
+  let ST = null, UN = null, LG = null, CO = null;
+  const opt = (u) => fetch(u).then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
 
   async function loadStates() {
-    if (!ST) [ST, UN] = await Promise.all([fetch('data/india/states.json').then((r) => r.json()), fetch('data/india/union.json').then((r) => r.json()).catch(() => ({}))]);
+    if (!ST) [ST, UN, LG, CO] = await Promise.all([fetch('data/india/states.json').then((r) => r.json()), opt('data/india/union.json'), opt('data/india/lgd.json'), opt('data/india/collectors.json')]);
     return ST;
+  }
+  const n = (v) => (v == null ? '—' : v.toLocaleString('en-IN'));
+  const headTitle = (d) => (/deputy commissioner|\bd\.?\s?c\b/i.test(d) ? 'Deputy Commissioner' : /district commissioner/i.test(d) ? 'District Commissioner' :/collector/i.test(d) && /magistrate|\bd\.?\s?m\b/i.test(d) ? 'Collector & DM' : /magistrate|\bd\.?\s?m\b/i.test(d) ? 'District Magistrate' : 'Collector');
+  // Local-government counts from LGD for one state (or the India total).
+  function lgdBlock(r, name) {
+    if (!r) return '';
+    const items = [
+      ['Districts', r.districts], ['Sub-districts / tehsils', r.subDistricts], ['Development blocks', r.blocks],
+      ['Zila Parishads', r.districtPanchayats], ['Panchayat Samitis (block panchayats)', r.intermediatePanchayats], ['Gram Panchayats', r.villagePanchayats],
+      ['Traditional local bodies', r.traditionalLocalBodies], ['Villages', r.villages], ['Urban local bodies', r.urbanLocalBodies], ['Cantonment boards', r.cantonmentBoards],
+    ].filter(([, v]) => v != null && v !== 0);
+    return `<div class="lgd-grid">${items.map(([l, v]) => `<div class="kpi"><div class="v">${n(v)}</div><div class="l">${esc(l)}</div></div>`).join('')}</div>
+      <p class="src">From the ${ext(LG.source || 'https://lgdirectory.gov.in/', LG.sourceName || 'Local Government Directory')}${LG.reportDate ? `, report of ${fmt(LG.reportDate)}` : ''}. ${esc(LG.note || '')}${r.traditionalLocalBodies ? ` In ${esc(name)}, traditional bodies stand in for some panchayats.` : ''}</p>`;
   }
   const wl = (p) => (p.wiki ? `<a href="${wiki(p.wiki)}" target="_blank" rel="noopener">${esc(p.name)}</a>` : esc(p.name));
   const smallTable = (cols, rows) => `<div class="table-wrap"><table class="mp-table"><thead><tr>${cols.map((c) => `<th>${c}</th>`).join('')}</tr></thead><tbody>${rows.join('') || `<tr><td colspan="${cols.length}" class="empty">None listed</td></tr>`}</tbody></table></div>`;
@@ -35,6 +49,7 @@
     const cadres = [...new Set(O.map((o) => o.cadre).filter(Boolean))].sort();
     const ranks = [...RANK_RX.map((r) => r[0]), 'Other'];
     app.innerHTML = `
+      <div class="seg" style="margin-bottom:14px"><a href="#services" class="">IAS</a><a href="#ips" class="on">IPS</a></div>
       <div class="screener-head"><div><div class="eyebrow">Civil services</div><h1>IPS officers</h1>
       <p class="muted" style="margin-top:6px">All ${O.length.toLocaleString('en-IN')} Indian Police Service officers in the official Civil List (as on 1 January ${D.generated?.slice(0, 4) || ''}), with cadre, batch and present posting.</p></div><span class="note" id="o-count"></span></div>
       <div class="filters">
@@ -47,7 +62,7 @@
       <div class="table-wrap"><table class="mp-table"><thead><tr><th>Officer</th><th>Cadre</th><th class="n">Batch</th><th>Present post</th><th>Since</th><th>Pay</th><th>Home state</th><th class="n">Medals</th></tr></thead><tbody id="o-body"></tbody></table></div>
       <div class="pager" id="o-pager"></div>
       <p class="src">Source: ${ext(D.source, 'Ministry of Home Affairs, IPS Civil List')}. Postings change through the year; the list is republished each January. RR = direct recruit (UPSC), SPS = promoted from the State Police Service.</p>
-      <div class="card" style="margin-top:28px"><div class="eyebrow">IAS, IRS and IFoS</div><p style="margin-top:6px">The IAS record (DoPT) only answers requests from inside India. It will be added from a computer in India using the setup prompt prepared earlier.</p></div>`;
+      <div class="card" style="margin-top:28px" hidden><div class="eyebrow">IAS, IRS and IFoS</div><p style="margin-top:6px">The IAS record (DoPT) only answers requests from inside India. It will be added from a computer in India using the setup prompt prepared earlier.</p></div>`;
     const draw = () => {
       const q = OF.q.toLowerCase();
       const rows = O.filter((o) => (!q || `${o.name} ${o.post} ${o.home}`.toLowerCase().includes(q)) && (!OF.cadre || o.cadre === OF.cadre) && (!OF.rank || rankOf(o.post) === OF.rank) && (!OF.from || (o.batch && o.batch >= +OF.from)) && (!OF.to || (o.batch && o.batch <= +OF.to)));
@@ -126,37 +141,39 @@
     document.title = 'How India is governed · Who Runs India';
     const S = ST.states, mlaSeats = S.reduce((s, x) => s + (x.assembly?.seats || 0), 0), mlas = S.reduce((s, x) => s + x.mlas.length, 0);
     const pm = 'Narendra Modi';
+    const T = LG?.total, nDist = Object.values(UN.districts || {}).reduce((a, x) => a + x.length, 0);
     app.innerHTML = `
       <div class="structure-head"><div class="eyebrow">How India is governed</div><h1>From the President to the Gram Panchayat</h1>
       <p class="lede">India has three tiers of elected government (Union, State and local), each with its own executive, legislature and civil service. Tap a tier to jump; tap any office in blue to see who holds it.</p>
-      <div class="tier-nav"><a href="#t-union">Union</a><a href="#t-state">State</a><a href="#t-district">District</a><a href="#t-rural">Rural local</a><a href="#t-urban">Urban local</a><a href="#t-police">Police</a><a href="#t-courts">Courts</a><a href="#t-elections">Who runs elections</a></div></div>
+      <div class="tier-nav"><a href="#t-union">Union</a><a href="#t-state">State</a><a href="#t-district">District</a><a href="#t-rural">Rural local</a><a href="#t-urban">Urban local</a>${LG?.total ? '<a href="#t-lgd">In numbers</a>' : ''}<a href="#t-police">Police</a><a href="#t-courts">Courts</a><a href="#t-elections">Who runs elections</a></div></div>
       <div id="t-union">${tier('1 · Union (national) government', [
         ['President', 'Head of state. Elected for 5 years by an electoral college of all elected MPs and MLAs.', 'Droupadi Murmu', 'index.html#country-IND-leaders'],
         ['Vice-President', 'Elected for 5 years by all MPs. Chairs the Rajya Sabha.', UN.vicePresident?.name || null, '#union'],
         ['Prime Minister & Union Council of Ministers', 'The PM leads the party or coalition with a Lok Sabha majority. Ministers are appointed by the President on the PM\'s advice and must be MPs within 6 months.', `${(UN.ministers || []).length} ministers`, '#union'],
         ['Lok Sabha (House of the People)', `543 elected seats, one per constituency, for 5 years. ${D.mps.length} members sitting now.`, `${D.mps.length} MPs`, '#mps'],
         ['Rajya Sabha (Council of States)', 'Up to 250 members: elected by state MLAs plus 12 nominated by the President. 6-year terms; one-third retire every 2 years, so it is never dissolved.', `${(UN.rajyaSabha || []).length} members`, '#union'],
-        ['Union civil service', 'Cabinet Secretary (senior-most civil servant) → Secretaries to the Government of India → Additional / Joint Secretaries → Directors.', null, '#services'],
+        ['Union civil service', 'Cabinet Secretary (senior-most civil servant) → Secretaries to the Government of India → Additional / Joint Secretaries → Directors. Most senior posts are held by IAS officers on central deputation.', 'IAS officers', '#services'],
       ])}</div>
       <div id="t-state">${tier('2 · State government', [
         ['Governor', 'Head of the state. Appointed by the President for 5 years. In Union Territories this role is held by a Lieutenant Governor or Administrator.', `${S.filter((x) => x.governor).length} listed`, '#states'],
         ['Chief Minister & Council of Ministers', 'The CM leads the majority in the Legislative Assembly. The council can have at most 15% of the assembly\'s strength.', `${S.filter((x) => x.cm).length} CMs`, '#states'],
         ['Legislative Assembly (Vidhan Sabha)', `Directly elected MLAs, 5-year term. ${mlaSeats.toLocaleString('en-IN')} seats across ${S.filter((x) => x.assembly).length} assemblies.`, `${mlas.toLocaleString('en-IN')} MLAs with affidavits`, '#states'],
         ['Legislative Council (Vidhan Parishad)', 'Upper house in 6 states only: Andhra Pradesh, Bihar, Karnataka, Maharashtra, Telangana and Uttar Pradesh. MLCs serve 6 years, one-third retiring every 2 years; elected by MLAs, local bodies, graduates and teachers, plus nominees.', `${Object.values(UN.councils || {}).reduce((a, x) => a + x.length, 0)} MLCs`, '#states'],
-        ['Chief Secretary', 'Senior-most IAS officer of the state; heads the state civil service and secretariat.', null, '#services'],
+        ['Chief Secretary', 'Senior-most IAS officer of the state; heads the state civil service and secretariat.', CO?.chiefSecretaries ? `${Object.keys(CO.chiefSecretaries).length} listed` : null, '#services'],
         ['Director General of Police (DGP)', 'Head of the state police force, an IPS officer.', `${(UN.police || []).length} DGPs`, '#police'],
       ])}</div>
       <div id="t-district">${tier('3 · District administration', [
-        ['District Collector / District Magistrate', 'IAS officer who heads the district: revenue, law and order, elections and development.', `${Object.values(UN.districts || {}).reduce((a, x) => a + x.length, 0)} districts`, '#states'],
+        ['District Collector / District Magistrate', 'IAS officer who heads the district: revenue, law and order, elections and development. Called Deputy Commissioner in some states.', CO?.matched ? `${CO.matched} named` : `${nDist} districts`, '#states'],
         ['Superintendent of Police (SP)', 'IPS officer who heads district police. Big cities have a Commissioner of Police instead.', null],
         ['Sub-Divisional Magistrate (SDM)', 'Heads a sub-division of the district.', null],
-        ['Tehsildar / Mamlatdar / Talukdar', 'Heads a tehsil or taluka: land records, revenue and certificates.', null],
-        ['Block Development Officer (BDO)', 'Runs rural development schemes in a block and works with the Panchayat Samiti.', null],
-      ], `India has ${Object.values(UN.districts || {}).reduce((a, x) => a + x.length, 0)} districts; each state page lists them.`)}</div>
+        ['Tehsildar / Mamlatdar / Talukdar', 'Heads a tehsil or taluka: land records, revenue and certificates.', T ? `${n(T.subDistricts)} sub-districts` : null],
+        ['Block Development Officer (BDO)', 'Runs rural development schemes in a block and works with the Panchayat Samiti.', T ? `${n(T.blocks)} blocks` : null],
+      ], `India has ${n(T?.districts ?? nDist)} districts${T ? ' (LGD)' : ''}; each state page lists them with their Collector.`)}</div>
       <div id="t-rural">${tier('4 · Rural local government (Panchayati Raj)', [
-        ['Zila Parishad (district)', 'Elected district council. Chairperson often called Zila Parishad Adhyaksha or President; a CEO (often IAS) runs its administration.', null],
-        ['Panchayat Samiti (block)', 'Elected council for a block of villages; head called Pradhan or Chairperson.', null],
-        ['Gram Panchayat (village)', 'Elected village council led by a Sarpanch / Mukhiya / Pradhan, with ward members (Panch). About 2.5 lakh Gram Panchayats nationwide.', null],
+        ['Zila Parishad (district)', 'Elected district council. Chairperson often called Zila Parishad Adhyaksha or President; a CEO (often IAS) runs its administration.', T ? `${n(T.districtPanchayats)} Zila Parishads` : null],
+        ['Panchayat Samiti (block)', 'Elected council for a block of villages; head called Pradhan or Chairperson.', T ? `${n(T.intermediatePanchayats)} Panchayat Samitis` : null],
+        ['Gram Panchayat (village)', `Elected village council led by a Sarpanch / Mukhiya / Pradhan, with ward members (Panch). ${T ? `${n(T.villagePanchayats)} Gram Panchayats cover ${n(T.villages)} villages.` : 'About 2.5 lakh Gram Panchayats nationwide.'}`, T ? `${n(T.villagePanchayats)} GPs` : null],
+        ['Traditional local bodies', 'In parts of the North-East (Meghalaya, Mizoram, Nagaland, hill areas of Manipur, Assam and Tripura) customary village and district councils stand in for panchayats.', T?.traditionalLocalBodies ? `${n(T.traditionalLocalBodies)} bodies` : null],
         ['Gram Sabha', 'Every adult voter in the village. Approves plans and audits the Panchayat.', null],
       ], 'Set up by the 73rd Constitutional Amendment (1992). 5-year terms; at least one-third of seats reserved for women (50% in many states), with SC/ST reservation.')}</div>
       <div id="t-urban">${tier('5 · Urban local government', [
@@ -164,11 +181,13 @@
         ['Municipal Council (Nagar Palika)', 'Smaller cities and towns, led by a Chairperson.', null],
         ['Nagar Panchayat', 'Areas moving from rural to urban.', null],
         ['Ward', 'Each city is divided into wards, each electing one councillor.', null],
-      ], 'Set up by the 74th Constitutional Amendment (1992). Elections every 5 years.')}</div>
+        ['Cantonment Board', 'Civic body for a military cantonment, under the Ministry of Defence.', T?.cantonmentBoards ? `${n(T.cantonmentBoards)} boards` : null],
+      ], `Set up by the 74th Constitutional Amendment (1992). Elections every 5 years.${T ? ` India has ${n(T.urbanLocalBodies)} urban local bodies in all (LGD).` : ''}`)}</div>
+      ${T ? `<section class="tier" id="t-lgd"><h2>Local government in numbers</h2>${lgdBlock(T, 'India')}</section>` : ''}
       <div id="t-police">${tier('6 · Police ranks (state police)', [
         ['DGP', 'Director General of Police: head of the state force.', null],
         ['ADGP → IGP → DIG', 'Additional DGP, Inspector General and Deputy Inspector General: zones and ranges.', null],
-        ['SP / SSP', 'Superintendent of Police: heads a district.', 'by state', '#services'],
+        ['SP / SSP', 'Superintendent of Police: heads a district.', 'by state', '#ips'],
         ['ASP / DSP', 'Additional or Deputy Superintendent: sub-division.', null],
         ['Inspector (SHO)', 'Usually the Station House Officer in charge of a police station.', null],
         ['Sub-Inspector → ASI → Head Constable → Constable', 'Station-level ranks.', null],
@@ -232,6 +251,7 @@
         <span class="pill accent">${TYPE[s.type]}</span>${s.assembly?.rulingParty ? `<span class="pill">Ruling: ${esc(s.assembly.rulingParty)}</span>` : ''}${s.council ? '<span class="pill">Bicameral legislature</span>' : ''}</div></div></div>
       <h2 style="margin:28px 0 12px">Who leads ${esc(s.name)}</h2>
       <div class="grid g3">${card(s.governor, s.governor?.title || 'Governor')}${card(s.cm, 'Chief Minister')}${s.deputyCms.map((d) => card(d, 'Deputy Chief Minister')).join('')}
+        ${(() => { const cs = CO?.chiefSecretaries?.[s.code]; return cs ? `<a class="now-card" href="#officer-${esc(cs.id)}">${face({ name: cs.name.replace(/^(shri|smt|ms|mr|mrs|dr)\.?\s+/i, '') }, 'avatar lg')}<div><div class="t">Chief Secretary</div><div class="n">${esc(cs.name)}</div><div class="s">IAS ${esc(cs.batch)}${cs.since ? ` · since ${fmt(cs.since)}` : ''}</div></div></a>` : ''; })()}
         ${!s.cm && !s.governor ? '<div class="card note">Administered directly by the Union Government through an Administrator appointed by the President.</div>' : ''}</div>
 
       <div class="grid g3" style="margin-top:20px">
@@ -250,10 +270,13 @@
         const rs = (UN.rajyaSabha || []).filter((x) => x.state === s.code);
         const mlc = (UN.councils || {})[s.code] || [];
         const ds = (UN.districts || {})[s.code] || [];
+        const cols = CO?.collectors?.[s.code] || {};
+        const nCol = ds.filter((d) => cols[d.name]).length;
+        const lg = LG?.states?.[s.code];
         return `
         <div class="grid g3" style="margin-top:20px">
           ${dg ? `<div class="card"><div class="eyebrow">Police chief</div><div class="n" style="font-weight:700;font-size:18px;margin-top:6px">${esc(dg.name)}</div><p class="note">${esc(dg.rank || 'DGP')} · IPS ${esc(dg.batch || '')} batch${dg.hq ? ` · HQ ${esc(dg.hq)}` : ''}</p><a class="note" href="#police">All police chiefs →</a></div>` : ''}
-          <div class="card"><div class="eyebrow">Districts</div><div class="big num" style="margin-top:6px">${ds.length}</div><p class="note">Each run by a District Collector / Magistrate (IAS) with a Superintendent of Police (IPS).</p><a class="note" href="#dists">See all districts ↓</a></div>
+          <div class="card"><div class="eyebrow">Districts</div><div class="big num" style="margin-top:6px">${lg?.districts ?? ds.length}</div><p class="note">Each run by a District Collector / Magistrate (IAS) with a Superintendent of Police (IPS).${CO?.collectors ? ` ${nCol} of ${ds.length} Collectors named below.` : ''}</p><a class="note" href="#dists">See all districts ↓</a></div>
           <div class="card"><div class="eyebrow">Rajya Sabha</div><div class="big num" style="margin-top:6px">${rs.length} members</div><p class="note">Elected by the state's MLAs for 6-year terms.</p><a class="note" href="#rsm">See them ↓</a></div>
         </div>
         ${mlc.length ? `<div class="section-head" style="margin-top:36px"><h2>Legislative Council (MLCs)</h2><span class="note">${mlc.length} of ${s.council?.seats || '?'} seats listed</span></div>
@@ -267,8 +290,9 @@
         <div class="section-head" style="margin-top:36px" id="ips-sec"><h2>Police leadership (IPS)</h2><span class="note" id="ips-note">Loading…</span></div>
         <div id="ips-box"></div>
         <div class="section-head" style="margin-top:36px" id="dists"><h2>Districts of ${esc(s.name)}</h2><span class="note">${ds.length} districts</span></div>
-        <div class="district-grid">${ds.map((d) => `<div class="district"><b>${d.wiki ? `<a href="${wiki(d.wiki)}" target="_blank" rel="noopener">${esc(d.name)}</a>` : esc(d.name)}</b>${d.hq && d.hq !== d.name ? `<span>HQ ${esc(d.hq)}</span>` : ''}</div>`).join('')}</div>
-        <p class="src">From ${ext(wiki('List of districts in India'), 'Wikipedia: List of districts in India')}. Collectors and SPs for each district are coming with the officer data.</p>`;
+        <div class="district-grid">${ds.map((d) => { const c = cols[d.name]; return `<div class="district"><b>${d.wiki ? `<a href="${wiki(d.wiki)}" target="_blank" rel="noopener">${esc(d.name)}</a>` : esc(d.name)}</b>${d.hq && d.hq !== d.name ? `<span>HQ ${esc(d.hq)}</span>` : ''}${c ? `<span class="dc">${headTitle(c.designation || '')}: <a href="#officer-${esc(c.id)}">${esc(c.name.replace(/^(shri|smt|ms|mr|mrs|dr)\.?\s+/i, ''))}</a> · IAS ${esc(c.batch)}</span>` : CO?.collectors ? '<span class="dc muted">Collector not in IAS records</span>' : ''}</div>`; }).join('')}</div>
+        <p class="src">Districts from ${ext(wiki('List of districts in India'), 'Wikipedia: List of districts in India')}.${CO?.collectors ? ` Collectors / DMs / Deputy Commissioners from each IAS officer's current posting in DoPT's ${ext('https://iascivillist.dopt.gov.in/', 'Civil List')} and Executive Record Sheets (rebuilt ${fmt(CO.generated)}). Some districts are headed by state-service officers, who are not in the IAS records.` : ''}</p>
+        ${lg ? `<div class="section-head" style="margin-top:36px" id="lgov"><h2>Local government in ${esc(s.name)}</h2><span class="note">Panchayats, villages and urban bodies</span></div>${lgdBlock(lg, s.name)}` : ''}`;
       })()}
 
       ${s.mlas.length ? `
@@ -297,7 +321,7 @@
       $('#ips-note').textContent = `${all.length} IPS officers in the ${cad} cadre`;
       box.innerHTML = `${top.length ? `<h3 style="margin:4px 0 10px">DGP & ADGP rank</h3>${smallTable(['Officer', 'Post', 'Batch'], top.map((o) => `<tr><td><b>${esc(o.name)}</b></td><td>${esc(o.post)}</td><td class="num">${o.batch || ''}</td></tr>`))}` : ''}
         ${chiefs.length ? `<h3 style="margin:20px 0 10px">District police chiefs (SP / SSP)</h3>${smallTable(['Officer', 'Post', 'Batch', 'Since'], chiefs.map((o) => `<tr><td><b>${esc(o.name)}</b></td><td>${esc(o.post)}</td><td class="num">${o.batch || ''}</td><td class="num">${o.since ? fmt(o.since) : ''}</td></tr>`))}` : ''}
-        <p class="note" style="margin-top:10px"><a href="#services" id="ips-all">Open all ${all.length} officers of this cadre in the IPS screener →</a></p>
+        <p class="note" style="margin-top:10px"><a href="#ips" id="ips-all">Open all ${all.length} officers of this cadre in the IPS screener →</a></p>
         <p class="src">From the ${ext(D.source, 'MHA IPS Civil List')} (as on 1 January). ${cad === 'AGMUT' ? 'AGMUT is a joint cadre for Arunachal, Goa, Mizoram and the Union Territories, so officers here may serve any of them.' : ''} District SPs from the State Police Service are not in this list.</p>`;
       $('#ips-all')?.addEventListener('click', () => { Object.assign(OF, { q: '', cadre: cad, rank: '', from: '', to: '', page: 1 }); });
     });
@@ -349,5 +373,5 @@
 
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
-  window.IN = { loadStates, structure, states, state, elections, union, police, officers, getStates: () => ST, getUnion: () => UN };
+  window.IN = { loadStates, structure, states, state, elections, union, police, officers, getStates: () => ST, getUnion: () => UN, getLGD: () => LG, getCollectors: () => CO };
 })();

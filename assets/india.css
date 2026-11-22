@@ -148,3 +148,12 @@ a.cat:hover { border-color: var(--saffron); text-decoration: none; }
 .district { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; font-size: 14px; }
 .district b a { color: var(--ink); }
 .district span { display: block; font-size: 12px; color: var(--muted); }
+.district .dc { margin-top: 3px; color: var(--ink-2); }
+.district .dc a { color: var(--ink); font-weight: 600; }
+.district .dc.muted { color: var(--muted); font-style: italic; }
+.lgd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 170px), 1fr)); gap: 10px; }
+.linkish { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: left; }
+.linkish:hover { color: var(--saffron); text-decoration: underline; }
+.seg a { padding: 6px 14px; border-radius: 7px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.seg a:hover { text-decoration: none; color: var(--ink); }
+.seg a.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgb(0 0 0 / 0.1); }

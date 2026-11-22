@@ -53,5 +53,9 @@ To enable it: push to GitHub, open **Settings → Pages**, and set **Source** to
 
 ## Who Runs India
 
-`india.html`: governance structure, states & UTs (CMs, Governors, MLAs), MPs, election calendar. Data: `scripts/fetch-india.mjs`, `scripts/fetch-states.mjs`.
+`india.html`: governance structure, states & UTs (CMs, Governors, Chief Secretaries, MLAs), MPs, IAS officers, District Collectors, local-government counts, election calendar. Data: `scripts/fetch-india.mjs`, `scripts/fetch-states.mjs`, `scripts/fetch-union.mjs`, `scripts/fetch-ias.mjs`, `scripts/fetch-lgd.mjs`, `scripts/parse_ips_civil_list.py`.
+
+- **IAS officers** (`node scripts/fetch-ias.mjs`, ~35 minutes): DoPT's public [IAS Civil List](https://iascivillist.dopt.gov.in/) (one form POST per cadre) plus each officer's public Executive Record Sheet on SUPREMO for posting history. Writes `data/india/ias.json` (officers and current posting), `data/india/ias/<CADRE>.json` (posting histories, loaded on demand) and `data/india/collectors.json` (district → Collector / DM / DC, state → Chief Secretary). Only official service data is stored: no photos, phone numbers, addresses or full dates of birth. `ER=0` skips the ER sheets; `ONLY=UP,TN` refreshes some cadres only.
+- **Local government** (`node scripts/fetch-lgd.mjs`, a few seconds): LGD's public "Report on State wise Administrative Units & Panchayati Raj Institutions" → `data/india/lgd.json` (districts, sub-districts, blocks, Zila Parishads, Panchayat Samitis, Gram Panchayats, traditional bodies, villages, urban local bodies, cantonment boards).
+- DoPT (and possibly LGD) refuse connections from outside India, so GitHub's servers can't refresh them. Run both scripts from an Indian connection and commit `data/india/`. The daily workflow keeps whatever is committed.
 - IPS officers: `python3 scripts/parse_ips_civil_list.py` (needs pdftotext). MHA republishes the Civil List every January, so run this once a year.
