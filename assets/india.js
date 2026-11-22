@@ -33,12 +33,21 @@ const median = (arr) => { const s = [...arr].sort((a, b) => a - b); return s.len
 const EDU_ORDER = ['Illiterate', 'Literate', '5th Pass', '8th Pass', '10th Pass', '12th Pass', 'Diploma', 'Graduate', 'Graduate Professional', 'Post Graduate', 'Doctorate', 'Others'];
 const edu = (m) => m.affidavit?.education || m.qualification || '';
 
+/* ---------- structure / states / elections (assets/india-states.js) ---------- */
+const loadStates = () => window.IN.loadStates();
+const structure = () => window.IN.structure(app, DATA);
+const states = () => window.IN.states(app, DATA);
+const state = ([code]) => window.IN.state(app, DATA, (code || '').toUpperCase());
+const elections = () => window.IN.elections(app, DATA);
+window.IN_setStateFilter = (name) => { S.f = { ...DEFAULT_F, state: DATA.mps.find((m) => m.state.toLowerCase().replace(/&/g, 'and') === name.toLowerCase())?.state || '' }; S.title = `MPs from ${name}`; S.page = 1; };
+
 /* ---------- router ---------- */
-const routes = { '': home, home, mps, mp, services, companies, sources };
+const routes = { '': home, home, mps, mp, services, companies, sources, structure, states, state, elections };
 async function router() {
   const [name, ...args] = location.hash.replace(/^#\/?/, '').split('-');
-  $$('.nav a').forEach((a) => a.classList.toggle('active', a.dataset.nav === name || (name === 'mp' && a.dataset.nav === 'mps')));
+  $$('.nav a').forEach((a) => a.classList.toggle('active', a.dataset.nav === name || (name === 'mp' && a.dataset.nav === 'mps') || (name === 'state' && a.dataset.nav === 'states')));
   await load();
+  if (['structure', 'states', 'state', 'elections', 'home', ''].includes(name)) await loadStates();
   (routes[name] || home)(args);
   if (!router.keep) window.scrollTo(0, 0);
   router.keep = false;
@@ -79,6 +88,8 @@ function home() {
     </section>
 
     <section class="cats">
+      <a class="cat" href="#structure"><span class="st live"><span class="live-dot"></span>Explainer</span><span class="n">7 tiers</span><span class="t">How India is governed</span><span class="d">From the President to the Gram Panchayat: who is elected, who is appointed, and who runs each election.</span><span class="go">See the structure →</span></a>
+      <a class="cat" href="#states"><span class="st live"><span class="live-dot"></span>Live · 36 states & UTs</span><span class="n">${window.IN.getStates()?.states.reduce((a, x) => a + x.mlas.length, 0).toLocaleString('en-IN')}</span><span class="t">States, CMs, Governors & MLAs</span><span class="d">Every Chief Minister, Deputy CM, Governor and MLA, with assets, criminal cases and the next election date.</span><span class="go">Open states →</span></a>
       <a class="cat" href="#mps"><span class="st live"><span class="live-dot"></span>Live · Lok Sabha</span><span class="n">${M.length}</span><span class="t">Members of Parliament</span><span class="d">18th Lok Sabha. Filter by state, party, education, assets and criminal cases.</span><span class="go">Open MP screener →</span></a>
       <a class="cat" href="index.html#country-IND-leaders"><span class="st live"><span class="live-dot"></span>Live · Since 1947</span><span class="n">18</span><span class="t">Prime Ministers & Presidents</span><span class="d">Every PM and President with terms, tenure and party, from Nehru and Rajendra Prasad to today.</span><span class="go">Open timeline →</span></a>
       <a class="cat soon" href="#services"><span class="st">Next · DoPT / MHA</span><span class="n">IAS · IPS</span><span class="t">Civil services</span><span class="d">IAS, IPS, IRS and IFoS officers with postings, batches and cadres. Source access in progress.</span><span class="go">See plan →</span></a>
@@ -266,6 +277,8 @@ function sources() {
     <ul class="src-list">
       <li><b>Lok Sabha members</b>: ${ext('https://sansad.in/ls/members', 'Sansad')} official members API: name, party, state, constituency, age, terms, education, profession, photo, official email.</li>
       <li><b>Assets, liabilities, criminal cases</b>: ${ext('https://www.myneta.info/LokSabha2024/', 'MyNeta (ADR)')}, summarising the affidavits candidates filed with the Election Commission in 2024. Criminal cases are pending cases the candidate declared, not convictions.</li>
+      <li><b>Chief Ministers, Deputy CMs, Governors, LGs, assembly sizes</b>: Wikipedia's current-office lists (${ext('https://en.wikipedia.org/wiki/Chief_minister_(India)', 'Chief ministers')}, ${ext('https://en.wikipedia.org/wiki/List_of_current_Indian_lieutenant_governors_and_administrators', 'Governors & LGs')}, ${ext('https://en.wikipedia.org/wiki/State_legislative_assemblies_of_India', 'Assemblies')}).</li>
+      <li><b>MLAs</b>: affidavits from each state's latest assembly election via ${ext('https://www.myneta.info/', 'MyNeta (ADR)')}.</li>
       <li><b>Prime Ministers and Presidents</b>: Wikidata, via the ${ext('index.html#country-IND-leaders', 'World Governance Atlas')}.</li>
     </ul>
     <p class="note" style="margin-top:16px">Personal phone numbers and home addresses are published by Sansad but deliberately not shown here. The data is rebuilt automatically every day. ${DATA.mps.filter((m) => !m.affidavit).length} MPs have no matched affidavit summary yet.</p></div>`;
@@ -276,8 +289,14 @@ function bindSearch(input, box) {
   input.addEventListener('input', () => {
     const q = input.value.trim().toLowerCase();
     if (q.length < 2) { box.hidden = true; return; }
-    const hits = DATA.mps.filter((m) => `${m.name} ${m.constituency} ${m.party} ${m.partyName} ${m.state}`.toLowerCase().includes(q)).slice(0, 8);
-    box.innerHTML = hits.map((m) => `<a href="#mp-${m.id}">${photo(m)}<span><b>${esc(m.name)}</b><br><small class="muted">${esc(m.constituency)}, ${esc(m.state)}</small></span><span class="kind">${esc(m.party)}</span></a>`).join('') || '<div class="sr-head">No matches</div>';
+    const hits = DATA.mps.filter((m) => `${m.name} ${m.constituency} ${m.party} ${m.partyName} ${m.state}`.toLowerCase().includes(q)).slice(0, 6);
+    const ST = window.IN.getStates()?.states || [];
+    const sts = ST.filter((x) => `${x.name} ${x.cm?.name || ''} ${x.governor?.name || ''}`.toLowerCase().includes(q)).slice(0, 4);
+    const mlas = ST.flatMap((x) => x.mlas.filter((m) => `${m.name} ${m.constituency}`.toLowerCase().includes(q)).map((m) => [x, m])).slice(0, 5);
+    box.innerHTML = (sts.length ? `<div class="sr-head">States & UTs</div>${sts.map((x) => `<a href="#state-${x.code}"><span class="sc-code">${x.code}</span><span><b>${esc(x.name)}</b><br><small class="muted">CM ${esc(x.cm?.name || '—')}</small></span></a>`).join('')}` : '')
+      + (hits.length ? `<div class="sr-head">MPs</div>${hits.map((m) => `<a href="#mp-${m.id}">${photo(m)}<span><b>${esc(m.name)}</b><br><small class="muted">${esc(m.constituency)}, ${esc(m.state)}</small></span><span class="kind">${esc(m.party)}</span></a>`).join('')}` : '')
+      + (mlas.length ? `<div class="sr-head">MLAs</div>${mlas.map(([x, m]) => `<a href="#state-${x.code}"><span class="avatar">${initials(m.name)}</span><span><b>${esc(m.name)}</b><br><small class="muted">MLA, ${esc(m.constituency)}, ${esc(x.name)}</small></span><span class="kind">${esc(m.party)}</span></a>`).join('')}` : '')
+      || '<div class="sr-head">No matches</div>';
     box.hidden = false;
   });
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { const a = $('a', box); if (a) location.hash = a.getAttribute('href'); } if (e.key === 'Escape') box.hidden = true; });
@@ -291,5 +310,5 @@ $('#theme').addEventListener('click', () => {
   r.dataset.theme = dark ? 'light' : 'dark';
   try { localStorage.setItem('wga-theme', r.dataset.theme); } catch (e) {}
 });
-load().then(() => bindSearch($('#search'), $('#search-results')));
+load().then(() => loadStates()).then(() => bindSearch($('#search'), $('#search-results')));
 router();

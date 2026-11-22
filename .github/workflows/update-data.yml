@@ -38,6 +38,10 @@ jobs:
         if: github.event_name != 'push'
         continue-on-error: true
         run: node scripts/fetch-india.mjs
+      - name: Fetch India states (CMs, Governors, MLAs)
+        if: github.event_name != 'push'
+        continue-on-error: true
+        run: node scripts/fetch-states.mjs
       - name: Commit refreshed data
         if: github.event_name != 'push'
         run: |
