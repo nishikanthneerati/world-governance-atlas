@@ -185,13 +185,13 @@
       ], `Set up by the 74th Constitutional Amendment (1992). Elections every 5 years.${T ? ` India has ${n(T.urbanLocalBodies)} urban local bodies in all (LGD).` : ''}`)}</div>
       ${T ? `<section class="tier" id="t-lgd"><h2>Local government in numbers</h2>${lgdBlock(T, 'India')}</section>` : ''}
       <div id="t-police">${tier('6 · Police ranks (state police)', [
-        ['DGP', 'Director General of Police: head of the state force.', null],
-        ['ADGP → IGP → DIG', 'Additional DGP, Inspector General and Deputy Inspector General: zones and ranges.', null],
-        ['SP / SSP', 'Superintendent of Police: heads a district.', 'by state', '#ips'],
+        ['DGP', 'Director General of Police: head of the state force.', '36 forces', '#police'],
+        ['ADGP → IGP → DIG', 'Additional DGP, Inspector General and Deputy Inspector General: zones and ranges.', 'zones & ranges', '#police'],
+        ['SP / SSP', 'Superintendent of Police: heads a district.', 'by district', '#police'],
         ['ASP / DSP', 'Additional or Deputy Superintendent: sub-division.', null],
-        ['Inspector (SHO)', 'Usually the Station House Officer in charge of a police station.', null],
+        ['Inspector (SHO)', 'Usually the Station House Officer in charge of a police station.', 'police stations', '#police'],
         ['Sub-Inspector → ASI → Head Constable → Constable', 'Station-level ranks.', null],
-      ], 'Police is a state subject. Officers from DSP upward are mostly from the IPS or the State Police Service.')}</div>
+      ], 'Police is a state subject. Officers from DSP upward are mostly from the IPS or the State Police Service. <a href="#police">Drill down by state on the map →</a>')}</div>
       <div id="t-courts">${tier('7 · Courts', [
         ['Supreme Court', 'Chief Justice of India and the other judges, appointed by the President on the collegium\'s recommendation.', `${(UN.supremeCourt || []).length} judges`, '#union'],
         ['High Courts', '25 High Courts, some covering more than one state or UT.', null],
@@ -275,7 +275,7 @@
         const lg = LG?.states?.[s.code];
         return `
         <div class="grid g3" style="margin-top:20px">
-          ${dg ? `<div class="card"><div class="eyebrow">Police chief</div><div class="n" style="font-weight:700;font-size:18px;margin-top:6px">${esc(dg.name)}</div><p class="note">${esc(dg.rank || 'DGP')} · IPS ${esc(dg.batch || '')} batch${dg.hq ? ` · HQ ${esc(dg.hq)}` : ''}</p><a class="note" href="#police">All police chiefs →</a></div>` : ''}
+          ${dg ? `<div class="card"><div class="eyebrow">Police chief</div><div class="n" style="font-weight:700;font-size:18px;margin-top:6px">${esc(dg.name)}</div><p class="note">${esc(dg.rank || 'DGP')} · IPS ${esc(dg.batch || '')} batch${dg.hq ? ` · HQ ${esc(dg.hq)}` : ''}</p><a class="note" href="#police-${s.code}">Full police chain of command →</a></div>` : ''}
           <div class="card"><div class="eyebrow">Districts</div><div class="big num" style="margin-top:6px">${lg?.districts ?? ds.length}</div><p class="note">Each run by a District Collector / Magistrate (IAS) with a Superintendent of Police (IPS).${CO?.collectors ? ` ${nCol} of ${ds.length} Collectors named below.` : ''}</p><a class="note" href="#dists">See all districts ↓</a></div>
           <div class="card"><div class="eyebrow">Rajya Sabha</div><div class="big num" style="margin-top:6px">${rs.length} members</div><p class="note">Elected by the state's MLAs for 6-year terms.</p><a class="note" href="#rsm">See them ↓</a></div>
         </div>
@@ -287,7 +287,7 @@
         ${(() => { const mc = (UN.municipalCorporations || []).filter((x) => x.state === s.code); return mc.length ? `<div class="section-head" style="margin-top:36px"><h2>Municipal corporations</h2><span class="note">${mc.length} city corporations</span></div>
           ${smallTable(['Corporation', 'District', 'Wards', 'Population (2011)', 'Last election'], mc.map((x) => `<tr><td><b>${x.wiki ? `<a href="${wiki(x.wiki)}" target="_blank" rel="noopener">${esc(x.name)}</a>` : esc(x.name)}</b></td><td>${esc(x.district || '')}</td><td class="num">${x.wards || ''}</td><td class="num">${x.population ? x.population.toLocaleString('en-IN') : ''}</td><td class="num">${esc(x.lastElection || '')}</td></tr>`))}
           <p class="src">From ${ext(wiki('List of municipal corporations in India'), 'Wikipedia: municipal corporations in India')}. Municipal councils and nagar panchayats are not listed yet.</p>` : ''; })()}
-        <div class="section-head" style="margin-top:36px" id="ips-sec"><h2>Police leadership (IPS)</h2><span class="note" id="ips-note">Loading…</span></div>
+        <div class="section-head" style="margin-top:36px" id="ips-sec"><h2>Police leadership (IPS)</h2><a class="note" href="#police-${s.code}" style="margin-left:auto;margin-right:12px">Zones, ranges, districts & map →</a><span class="note" id="ips-note">Loading…</span></div>
         <div id="ips-box"></div>
         <div class="section-head" style="margin-top:36px" id="dists"><h2>Districts of ${esc(s.name)}</h2><span class="note">${ds.length} districts</span></div>
         <div class="district-grid">${ds.map((d) => { const c = cols[d.name]; return `<div class="district"><b>${d.wiki ? `<a href="${wiki(d.wiki)}" target="_blank" rel="noopener">${esc(d.name)}</a>` : esc(d.name)}</b>${d.hq && d.hq !== d.name ? `<span>HQ ${esc(d.hq)}</span>` : ''}${c ? `<span class="dc">${headTitle(c.designation || '')}: <a href="#officer-${esc(c.id)}">${esc(c.name.replace(/^(shri|smt|ms|mr|mrs|dr)\.?\s+/i, ''))}</a> · IAS ${esc(c.batch)}</span>` : CO?.collectors ? '<span class="dc muted">Collector not in IAS records</span>' : ''}</div>`; }).join('')}</div>

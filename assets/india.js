@@ -40,7 +40,7 @@ const states = () => window.IN.states(app, DATA);
 const state = ([code]) => window.IN.state(app, DATA, (code || '').toUpperCase());
 const elections = () => window.IN.elections(app, DATA);
 const union = () => window.IN.union(app, DATA);
-const police = () => window.IN.police(app, DATA);
+const police = (args) => window.IN.police(app, DATA, args);
 window.IN_setStateFilter = (name) => { S.f = { ...DEFAULT_F, state: DATA.mps.find((m) => m.state.toLowerCase().replace(/&/g, 'and') === name.toLowerCase())?.state || '' }; S.title = `MPs from ${name}`; S.page = 1; };
 
 /* ---------- router ---------- */
@@ -439,6 +439,8 @@ function sources() {
       <li><b>IAS officers</b>: DoPT's ${ext('https://iascivillist.dopt.gov.in/', 'IAS Civil List')} (identity no., batch, cadre, domicile, recruitment, qualification, pay level, posting) and each officer's public ${ext('https://supremo.dopt.gov.in', 'Executive Record Sheet (SUPREMO)')} for posting history. Full dates of birth, photos and personal contact details are not stored; only the superannuation month is shown.</li>
       <li><b>District Collectors / DMs / Deputy Commissioners</b>: matched from each IAS officer's current posting to the district list. A district shows no name if it is headed by a non-IAS officer or the officer's record has not been updated yet.</li>
       <li><b>Local government counts</b>: ${ext('https://lgdirectory.gov.in/', 'Local Government Directory (LGD)')}, Ministry of Panchayati Raj, "Report on State wise Administrative Units & Panchayati Raj Institutions".</li>
+      <li><b>Police organisation</b>: ${ext('https://bprd.mha.gov.in/page/data_on_police_organization_dopo', 'Data on Police Organisations')}, Bureau of Police Research & Development (MHA): zones, ranges, police districts, sub-divisions, circles, police stations, outposts, commissionerates and the strength of every rank in each state, as reported by the states.</li>
+      <li><b>Map</b>: state boundaries from ${ext('https://github.com/datameet/maps', 'DataMeet')} (official outline of India, CC BY 4.0); district headquarters from Wikipedia coordinates.</li>
       <li><b>Prime Ministers and Presidents</b>: Wikidata, via the ${ext('index.html#country-IND-leaders', 'World Governance Atlas')}.</li>
     </ul>
     <p class="note" style="margin-top:16px">Personal phone numbers and home addresses are published by Sansad but deliberately not shown here. The data is rebuilt automatically every day. ${DATA.mps.filter((m) => !m.affidavit).length} MPs have no matched affidavit summary yet.</p></div>`;
