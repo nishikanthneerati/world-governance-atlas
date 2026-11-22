@@ -8,11 +8,61 @@
   const ini = (n) => esc((n || '?').split(/\s+/).filter((w) => /^[A-Za-z]/.test(w)).slice(0, 2).map((w) => w[0]).join('').toUpperCase());
   const face = (p, cls = 'avatar') => (p?.img ? `<img class="${cls}" src="${esc(p.img)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.outerHTML='<span class=&quot;${cls}&quot;>${ini(p.name)}</span>'">` : `<span class="${cls}">${ini(p?.name)}</span>`);
   const TYPE = { S: 'State', U: 'Union territory with legislature', X: 'Union territory' };
-  let ST = null;
+  let ST = null, UN = null;
 
   async function loadStates() {
-    if (!ST) ST = await (await fetch('data/india/states.json')).json();
+    if (!ST) [ST, UN] = await Promise.all([fetch('data/india/states.json').then((r) => r.json()), fetch('data/india/union.json').then((r) => r.json()).catch(() => ({}))]);
     return ST;
+  }
+  const wl = (p) => (p.wiki ? `<a href="${wiki(p.wiki)}" target="_blank" rel="noopener">${esc(p.name)}</a>` : esc(p.name));
+  const smallTable = (cols, rows) => `<div class="table-wrap"><table class="mp-table"><thead><tr>${cols.map((c) => `<th>${c}</th>`).join('')}</tr></thead><tbody>${rows.join('') || `<tr><td colspan="${cols.length}" class="empty">None listed</td></tr>`}</tbody></table></div>`;
+
+  /* ---------------------------------------------------------------- union government */
+  let rsFilter = { state: '', party: '', q: '' };
+  function union(app, D) {
+    document.title = 'Union Government · Who Runs India';
+    const M = UN.ministers || [];
+    const ranks = ['Cabinet Minister', 'Minister of State (Independent Charge)', 'Minister of State'];
+    const mpByName = (n) => D.mps.find((m) => m.name.toLowerCase() === n.toLowerCase());
+    const minCard = (m) => { const mp = mpByName(m.name); return `<div class="min-card"><div class="mc-top">${face({ name: m.name, img: mp?.photo })}<div><div class="n">${mp ? `<a href="#mp-${mp.id}">${esc(m.name)}</a>` : wl(m)}</div><div class="s">${esc(m.party)}${mp ? ` · MP, ${esc(mp.constituency)}` : ''}</div></div></div><ul>${m.portfolios.flatMap((x) => x.split(/\s(?=(?:Minister|Department|Ministry) of\b)|;\s*and\s+/)).map((x) => `<li>${esc(x.trim())}</li>`).join('')}</ul></div>`; };
+    const RS = UN.rajyaSabha || [];
+    const rsParties = [...new Set(RS.map((x) => x.party).filter(Boolean))].sort();
+    const rsStates = [...new Set(RS.map((x) => x.stateLabel))].sort();
+    app.innerHTML = `
+      <div class="screener-head"><div><div class="eyebrow">Union government</div><h1>Who runs the Government of India</h1>
+      <p class="muted" style="margin-top:6px">The President, the Prime Minister and ${M.length} ministers in the Union Council of Ministers, plus all ${RS.length} members of the Rajya Sabha.</p></div></div>
+      <div class="grid g3" style="margin:20px 0">
+        <a class="now-card" href="index.html#country-IND-leaders"><span class="avatar lg">DM</span><div><div class="t">President of India</div><div class="n">Droupadi Murmu</div><div class="s">Head of state · since 25 Jul 2022</div></div></a>
+        <a class="now-card" href="#mp-4589">${face({ name: 'Narendra Modi', img: 'data/india/photos/4589.jpg' }, 'avatar lg')}<div><div class="t">Prime Minister</div><div class="n">Narendra Modi</div><div class="s">Head of government · since 26 May 2014</div></div></a>
+        <a class="now-card" href="#elections"><span class="avatar lg">${M.length}</span><div><div class="t">Union Council of Ministers</div><div class="n">${M.filter((m) => m.rank === ranks[0]).length} Cabinet · ${M.filter((m) => m.rank !== ranks[0]).length} MoS</div><div class="s">${esc(UN.ministrySource || '')}</div></div></a>
+      </div>
+      ${ranks.map((r) => { const list = M.filter((m) => m.rank === r); return list.length ? `<div class="cat-head"><h3>${r}s</h3><span class="pill">${list.length}</span></div><div class="grid g3">${list.map(minCard).join('')}</div>` : ''; }).join('')}
+      <div class="section-head" style="margin-top:40px"><h2>Rajya Sabha (Council of States)</h2><span class="note" id="rs-count"></span></div>
+      <div class="filters"><input class="input" type="search" id="rs-q" placeholder="Name"><select id="rs-s" aria-label="State"><option value="">All states</option>${rsStates.map((x) => `<option>${esc(x)}</option>`).join('')}</select><select id="rs-p" aria-label="Party"><option value="">All parties</option>${rsParties.map((x) => `<option>${esc(x)}</option>`).join('')}</select></div>
+      <div id="rs-table"></div>
+      <p class="src">Ministers and portfolios from ${ext(wiki(UN.ministrySource || 'Union Council of Ministers'), `Wikipedia: ${UN.ministrySource || 'Union Council of Ministers'}`)}; Rajya Sabha from ${ext(wiki('List of current members of the Rajya Sabha'), 'Wikipedia: current members of the Rajya Sabha')}. Official records: ${ext('https://cabsec.gov.in', 'Cabinet Secretariat')}, ${ext('https://sansad.in/rs', 'Sansad (Rajya Sabha)')}.</p>`;
+    const draw = () => {
+      const q = rsFilter.q.toLowerCase();
+      const rows = RS.filter((x) => (!rsFilter.state || x.stateLabel === rsFilter.state) && (!rsFilter.party || x.party === rsFilter.party) && (!q || x.name.toLowerCase().includes(q)));
+      $('#rs-count').textContent = `${rows.length} of ${RS.length} members`;
+      $('#rs-table').innerHTML = smallTable(['Member', 'Party', 'State', 'Term'], rows.map((x) => `<tr><td><b>${wl(x)}</b></td><td><span class="ptag">${esc(x.party || '—')}</span></td><td>${x.state ? `<a href="#state-${x.state}">${esc(x.stateLabel)}</a>` : esc(x.stateLabel)}</td><td class="num">${esc(x.termStart || '')} – ${esc(x.termEnd || '')}</td></tr>`));
+    };
+    $('#rs-q').addEventListener('input', (e) => { rsFilter.q = e.target.value; draw(); });
+    $('#rs-s').addEventListener('change', (e) => { rsFilter.state = e.target.value; draw(); });
+    $('#rs-p').addEventListener('change', (e) => { rsFilter.party = e.target.value; draw(); });
+    draw();
+  }
+
+  /* ---------------------------------------------------------------- police */
+  function police(app) {
+    document.title = 'Police chiefs · Who Runs India';
+    const P = (UN.police || []).slice().sort((a, b) => a.place.localeCompare(b.place));
+    app.innerHTML = `
+      <div class="screener-head"><div><div class="eyebrow">Police</div><h1>Who heads the police in every state</h1>
+      <p class="muted" style="margin-top:6px">Police is a state subject: each state and UT has its own force, headed by a Director General of Police (DGP) from the Indian Police Service.</p></div></div>
+      <div class="grid g4" style="margin:20px 0">${P.map((x) => `<a class="leader-card" href="${x.state ? `#state-${x.state}` : '#'}"><span class="sc-code">${esc(x.state || '—')}</span><div><div class="t">${esc(x.rank || 'DGP')}, ${esc(x.place)}</div><div class="n">${esc(x.name)}</div><div class="c">IPS${x.batch ? ` · ${esc(x.batch)} batch` : ''}${x.hq ? ` · HQ ${esc(x.hq)}` : ''}</div></div></a>`).join('')}</div>
+      <div class="card"><div class="eyebrow">Ranks, top to bottom</div><p style="margin-top:6px">DGP → ADGP → IGP → DIG → SP / SSP (district) → ASP / DSP → Inspector (SHO, police station) → Sub-Inspector → ASI → Head Constable → Constable. Metropolitan cities have a Commissioner of Police instead of an SP. <a href="#structure">See the full structure →</a></p></div>
+      <p class="src">From ${ext(wiki('Director general of police'), 'Wikipedia: Director general of police')}. District SPs and station officers need the state police rosters, which are on the to-do list.</p>`;
   }
   const mpsOf = (name, mps) => mps.filter((m) => m.state.toLowerCase().replace(/&/g, 'and') === name.toLowerCase());
 
@@ -31,26 +81,26 @@
       <div id="t-union">${tier('1 · Union (national) government', [
         ['President', 'Head of state. Elected for 5 years by an electoral college of all elected MPs and MLAs.', 'Droupadi Murmu', 'index.html#country-IND-leaders'],
         ['Vice-President', 'Elected for 5 years by all MPs. Chairs the Rajya Sabha.', null],
-        ['Prime Minister & Union Council of Ministers', 'The PM leads the party or coalition with a Lok Sabha majority. Ministers are appointed by the President on the PM\'s advice and must be MPs within 6 months.', pm, '#mp-4589'],
+        ['Prime Minister & Union Council of Ministers', 'The PM leads the party or coalition with a Lok Sabha majority. Ministers are appointed by the President on the PM\'s advice and must be MPs within 6 months.', `${(UN.ministers || []).length} ministers`, '#union'],
         ['Lok Sabha (House of the People)', `543 elected seats, one per constituency, for 5 years. ${D.mps.length} members sitting now.`, `${D.mps.length} MPs`, '#mps'],
-        ['Rajya Sabha (Council of States)', 'Up to 250 members: elected by state MLAs plus 12 nominated by the President. 6-year terms; one-third retire every 2 years, so it is never dissolved.', null],
+        ['Rajya Sabha (Council of States)', 'Up to 250 members: elected by state MLAs plus 12 nominated by the President. 6-year terms; one-third retire every 2 years, so it is never dissolved.', `${(UN.rajyaSabha || []).length} members`, '#union'],
         ['Union civil service', 'Cabinet Secretary (senior-most civil servant) → Secretaries to the Government of India → Additional / Joint Secretaries → Directors.', null, '#services'],
       ])}</div>
       <div id="t-state">${tier('2 · State government', [
         ['Governor', 'Head of the state. Appointed by the President for 5 years. In Union Territories this role is held by a Lieutenant Governor or Administrator.', `${S.filter((x) => x.governor).length} listed`, '#states'],
         ['Chief Minister & Council of Ministers', 'The CM leads the majority in the Legislative Assembly. The council can have at most 15% of the assembly\'s strength.', `${S.filter((x) => x.cm).length} CMs`, '#states'],
         ['Legislative Assembly (Vidhan Sabha)', `Directly elected MLAs, 5-year term. ${mlaSeats.toLocaleString('en-IN')} seats across ${S.filter((x) => x.assembly).length} assemblies.`, `${mlas.toLocaleString('en-IN')} MLAs with affidavits`, '#states'],
-        ['Legislative Council (Vidhan Parishad)', 'Upper house in 6 states only: Andhra Pradesh, Bihar, Karnataka, Maharashtra, Telangana and Uttar Pradesh. MLCs serve 6 years, one-third retiring every 2 years; elected by MLAs, local bodies, graduates and teachers, plus nominees.', '6 states'],
+        ['Legislative Council (Vidhan Parishad)', 'Upper house in 6 states only: Andhra Pradesh, Bihar, Karnataka, Maharashtra, Telangana and Uttar Pradesh. MLCs serve 6 years, one-third retiring every 2 years; elected by MLAs, local bodies, graduates and teachers, plus nominees.', `${Object.values(UN.councils || {}).reduce((a, x) => a + x.length, 0)} MLCs`, '#states'],
         ['Chief Secretary', 'Senior-most IAS officer of the state; heads the state civil service and secretariat.', null, '#services'],
-        ['Director General of Police (DGP)', 'Head of the state police force, an IPS officer.', null, '#services'],
+        ['Director General of Police (DGP)', 'Head of the state police force, an IPS officer.', `${(UN.police || []).length} DGPs`, '#police'],
       ])}</div>
       <div id="t-district">${tier('3 · District administration', [
-        ['District Collector / District Magistrate', 'IAS officer who heads the district: revenue, law and order, elections and development.', null],
+        ['District Collector / District Magistrate', 'IAS officer who heads the district: revenue, law and order, elections and development.', `${Object.values(UN.districts || {}).reduce((a, x) => a + x.length, 0)} districts`, '#states'],
         ['Superintendent of Police (SP)', 'IPS officer who heads district police. Big cities have a Commissioner of Police instead.', null],
         ['Sub-Divisional Magistrate (SDM)', 'Heads a sub-division of the district.', null],
         ['Tehsildar / Mamlatdar / Talukdar', 'Heads a tehsil or taluka: land records, revenue and certificates.', null],
         ['Block Development Officer (BDO)', 'Runs rural development schemes in a block and works with the Panchayat Samiti.', null],
-      ], 'India has about 780 districts. Exact counts per state come from the Local Government Directory (LGD).')}</div>
+      ], `India has ${Object.values(UN.districts || {}).reduce((a, x) => a + x.length, 0)} districts; each state page lists them.`)}</div>
       <div id="t-rural">${tier('4 · Rural local government (Panchayati Raj)', [
         ['Zila Parishad (district)', 'Elected district council. Chairperson often called Zila Parishad Adhyaksha or President; a CEO (often IAS) runs its administration.', null],
         ['Panchayat Samiti (block)', 'Elected council for a block of villages; head called Pradhan or Chairperson.', null],
@@ -143,6 +193,27 @@
           <p class="note" style="margin-top:8px"><a href="#mps" id="state-mps">Open them in the MP screener →</a></p></div>
       </div>
 
+      ${(() => {
+        const dg = (UN.police || []).find((x) => x.state === s.code);
+        const rs = (UN.rajyaSabha || []).filter((x) => x.state === s.code);
+        const mlc = (UN.councils || {})[s.code] || [];
+        const ds = (UN.districts || {})[s.code] || [];
+        return `
+        <div class="grid g3" style="margin-top:20px">
+          ${dg ? `<div class="card"><div class="eyebrow">Police chief</div><div class="n" style="font-weight:700;font-size:18px;margin-top:6px">${esc(dg.name)}</div><p class="note">${esc(dg.rank || 'DGP')} · IPS ${esc(dg.batch || '')} batch${dg.hq ? ` · HQ ${esc(dg.hq)}` : ''}</p><a class="note" href="#police">All police chiefs →</a></div>` : ''}
+          <div class="card"><div class="eyebrow">Districts</div><div class="big num" style="margin-top:6px">${ds.length}</div><p class="note">Each run by a District Collector / Magistrate (IAS) with a Superintendent of Police (IPS).</p><a class="note" href="#dists">See all districts ↓</a></div>
+          <div class="card"><div class="eyebrow">Rajya Sabha</div><div class="big num" style="margin-top:6px">${rs.length} members</div><p class="note">Elected by the state's MLAs for 6-year terms.</p><a class="note" href="#rsm">See them ↓</a></div>
+        </div>
+        ${mlc.length ? `<div class="section-head" style="margin-top:36px"><h2>Legislative Council (MLCs)</h2><span class="note">${mlc.length} of ${s.council?.seats || '?'} seats listed</span></div>
+          ${smallTable(['Member', 'Party', 'Seat / elected by', 'Term ends'], mlc.map((x) => `<tr><td><b>${wl(x)}</b></td><td><span class="ptag">${esc(x.party || '—')}</span></td><td>${esc(x.seat)}</td><td class="num">${esc(x.termEnd || '')}</td></tr>`))}
+          <p class="src">From ${ext(wiki(`${s.name} Legislative Council`), `Wikipedia: ${s.name} Legislative Council`)}.</p>` : ''}
+        <div class="section-head" style="margin-top:36px" id="rsm"><h2>Rajya Sabha members from ${esc(s.name)}</h2></div>
+        ${smallTable(['Member', 'Party', 'Term'], rs.map((x) => `<tr><td><b>${wl(x)}</b></td><td><span class="ptag">${esc(x.party || '—')}</span></td><td class="num">${esc(x.termStart || '')} – ${esc(x.termEnd || '')}</td></tr>`))}
+        <div class="section-head" style="margin-top:36px" id="dists"><h2>Districts of ${esc(s.name)}</h2><span class="note">${ds.length} districts</span></div>
+        <div class="district-grid">${ds.map((d) => `<div class="district"><b>${d.wiki ? `<a href="${wiki(d.wiki)}" target="_blank" rel="noopener">${esc(d.name)}</a>` : esc(d.name)}</b>${d.hq && d.hq !== d.name ? `<span>HQ ${esc(d.hq)}</span>` : ''}</div>`).join('')}</div>
+        <p class="src">From ${ext(wiki('List of districts in India'), 'Wikipedia: List of districts in India')}. Collectors and SPs for each district are coming with the officer data.</p>`;
+      })()}
+
       ${s.mlas.length ? `
       <div class="section-head" style="margin-top:36px"><h2>MLAs (${s.lastElection} election)</h2><span class="note">${s.mlas.length} affidavits · ${withCases} declared criminal cases · ${crore} crorepatis</span></div>
       <div class="card" style="margin-bottom:16px"><ul class="party-bars">${parties.slice(0, 8).map(([p, n]) => `<li><b>${esc(p)}</b><span class="tr"><span style="width:${(n / parties[0][1]) * 100}%"></span></span><span class="num">${n}</span></li>`).join('')}</ul>
@@ -206,5 +277,5 @@
 
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
-  window.IN = { loadStates, structure, states, state, elections, getStates: () => ST };
+  window.IN = { loadStates, structure, states, state, elections, union, police, getStates: () => ST, getUnion: () => UN };
 })();

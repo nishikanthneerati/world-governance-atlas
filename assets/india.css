@@ -138,3 +138,13 @@ a.cat:hover { border-color: var(--saffron); text-decoration: none; }
 .sc-kv { display: flex; gap: 14px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 10px; margin-top: auto; }
 .sc-kv b { display: block; color: var(--ink); font-size: 14px; font-variant-numeric: tabular-nums; }
 .big { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+.min-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+.mc-top { display: flex; gap: 10px; align-items: center; }
+.min-card .n { font-weight: 700; }
+.min-card .n a { color: var(--ink); }
+.min-card .s { font-size: 12px; color: var(--muted); }
+.min-card ul { margin: 10px 0 0; padding-left: 18px; font-size: 13px; color: var(--ink-2); }
+.district-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: 8px; }
+.district { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; font-size: 14px; }
+.district b a { color: var(--ink); }
+.district span { display: block; font-size: 12px; color: var(--muted); }

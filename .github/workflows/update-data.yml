@@ -39,6 +39,10 @@ jobs:
         if: github.event_name != 'push'
         continue-on-error: true
         run: node scripts/fetch-states.mjs
+      - name: Fetch India Union government, Rajya Sabha, police, districts, MLCs
+        if: github.event_name != 'push'
+        continue-on-error: true
+        run: node scripts/fetch-union.mjs
       - name: Commit refreshed data
         if: github.event_name != 'push'
         run: |

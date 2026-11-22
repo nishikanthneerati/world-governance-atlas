@@ -16,8 +16,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'data', 'india');
 const WP_UA = `WorldGovernanceAtlas/1.0 (open public-data project${process.env.CONTACT ? '; ' + process.env.CONTACT : ''})`;
 const UA = 'Mozilla/5.0 (compatible; WhoRunsIndia/1.0; public-records research)';
-const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+export const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
+export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const YEAR = new Date().getFullYear();
 
 // Canonical list. type: S = state, U = union territory with legislature, X = UT without legislature.
@@ -37,7 +37,7 @@ export const STATES = [
   ['LA', 'Ladakh', 'X'], ['LD', 'Lakshadweep', 'X'],
 ].map(([code, name, type, myneta, mlc]) => ({ code, name, type, myneta: myneta || null, mlc: mlc || null }));
 
-async function get(url, { type = 'text', ua = UA, tries = 6 } = {}) {
+export async function get(url, { type = 'text', ua = UA, tries = 6 } = {}) {
   for (let i = 0; i < tries; i++) {
     try {
       const r = await fetch(url, { headers: { 'User-Agent': ua } });
@@ -53,50 +53,46 @@ async function get(url, { type = 'text', ua = UA, tries = 6 } = {}) {
 }
 
 const decode = (s) => s.replace(/&amp;/g, '&').replace(/&nbsp;|&#160;/g, ' ').replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n));
-const text = (h) => decode(h.replace(/<sup[\s\S]*?<\/sup>/g, '').replace(/<style[\s\S]*?<\/style>/g, '').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
-const norm = (s) => String(s || '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z]/g, '');
+export const text = (h) => decode(h.replace(/<sup[\s\S]*?<\/sup>/g, '').replace(/<style[\s\S]*?<\/style>/g, '').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
+export const norm = (s) => String(s || '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z]/g, '');
 const rupees = (s) => { const m = String(s).match(/Rs\s*([\d,]+)/); return m ? +m[1].replace(/,/g, '') : null; };
 
-/** Wikipedia tables -> arrays of {cells:[text], links:[firstLinkTitle per cell], img} with rowspans expanded. */
-async function wikiTables(page) {
-  const j = await get(`https://en.wikipedia.org/w/api.php?action=parse&format=json&prop=text&redirects=1&page=${encodeURIComponent(page)}`, { type: 'json', ua: WP_UA });
-  if (!j || j.error) { log(`  Wikipedia page missing: ${page}`); return []; }
-  const html = j.parse.text['*'];
-  return (html.match(/<table class="wikitable[\s\S]*?<\/table>/g) || []).map((t) => {
-    const rows = [];
-    const carry = []; // rowspan carry: index -> {cell, left}
-    for (const tr of t.match(/<tr[\s\S]*?<\/tr>/g) || []) {
-      const raw = [...tr.matchAll(/<(t[hd])([^>]*)>([\s\S]*?)<\/\1>/g)];
-      const out = [];
-      let ci = 0;
-      const pushCarry = () => { while (carry[ci] && carry[ci].left > 0) { out.push(carry[ci].cell); carry[ci].left--; ci++; } };
-      for (const [, , attrs, inner] of raw) {
-        pushCarry();
-        const cell = {
-          text: text(inner),
-          link: (inner.match(/<a href="\/wiki\/([^"#]+)"[^>]*>/) || [])[1] ? decodeURIComponent(inner.match(/<a href="\/wiki\/([^"#]+)"/)[1]).replace(/_/g, ' ') : null,
-          img: (inner.match(/<img[^>]+src="([^"]+)"/) || [])[1] || null,
-        };
-        const span = +(attrs.match(/rowspan="?(\d+)/) || [])[1] || 1;
-        const cs = +(attrs.match(/colspan="?(\d+)/) || [])[1] || 1;
-        for (let k = 0; k < cs; k++) {
-          out.push(cell);
-          if (span > 1) carry[ci] = { cell, left: span - 1 };
-          ci++;
-        }
-      }
+/** Parse one wikitable's HTML into rows of {text, link, img}, expanding rowspan/colspan. */
+export function parseTable(t) {
+  const rows = [];
+  const carry = [];
+  for (const tr of t.match(/<tr[\s\S]*?<\/tr>/g) || []) {
+    const raw = [...tr.matchAll(/<(t[hd])([^>]*)>([\s\S]*?)<\/\1>/g)];
+    const out = [];
+    let ci = 0;
+    const pushCarry = () => { while (carry[ci] && carry[ci].left > 0) { out.push(carry[ci].cell); carry[ci].left--; ci++; } };
+    for (const [, , attrs, inner] of raw) {
       pushCarry();
-      rows.push(out);
+      const lk = inner.match(/<a href="\/wiki\/(?!File:)([^"#]+)"/);
+      const cell = { text: text(inner), link: lk ? decodeURIComponent(lk[1]).replace(/_/g, ' ') : null, img: (inner.match(/<img[^>]+src="([^"]+)"/) || [])[1] || null };
+      const span = +(attrs.match(/rowspan="?(\d+)/) || [])[1] || 1;
+      const cs = +(attrs.match(/colspan="?(\d+)/) || [])[1] || 1;
+      for (let k = 0; k < cs; k++) { out.push(cell); if (span > 1) carry[ci] = { cell, left: span - 1 }; ci++; }
     }
-    return rows;
-  });
+    pushCarry();
+    rows.push(out);
+  }
+  return rows;
 }
-const fullImg = (src) => (src ? (src.startsWith('//') ? 'https:' + src : src).replace(/\/(\d+)px-/, '/250px-') : null);
+export async function wikiHtml(page) {
+  const j = await get(`https://en.wikipedia.org/w/api.php?action=parse&format=json&prop=text&redirects=1&page=${encodeURIComponent(page)}`, { type: 'json', ua: WP_UA });
+  if (!j || j.error) { log(`  Wikipedia page missing: ${page}`); return ''; }
+  return j.parse.text['*'];
+}
+export async function wikiTables(page) {
+  return ((await wikiHtml(page)).match(/<table class="wikitable[\s\S]*?<\/table>/g) || []).map(parseTable);
+}
+export const fullImg = (src) => (src ? (src.startsWith('//') ? 'https:' + src : src).replace(/\/(\d+)px-/, '/250px-') : null);
 
-function tableByHeader(tables, ...want) {
+export function tableByHeader(tables, ...want) {
   return tables.find((t) => t[0] && want.every((w) => t[0].some((c) => c.text.toLowerCase().includes(w))));
 }
-function rowsAsObjects(t) {
+export function rowsAsObjects(t) {
   const head = t[0].map((c) => c.text.toLowerCase());
   return t.slice(1).filter((r) => r.length >= head.length - 1).map((r) => {
     const o = {};
@@ -104,8 +100,8 @@ function rowsAsObjects(t) {
     return o;
   });
 }
-const pick = (o, ...keys) => { for (const k of Object.keys(o)) if (keys.some((x) => k.includes(x))) return o[k]; return null; };
-const tookOffice = (s) => { const m = String(s || '').match(/(\d{1,2} \w+ \d{4})/); return m ? new Date(m[1] + ' UTC').toISOString().slice(0, 10) : null; };
+export const pick = (o, ...keys) => { for (const k of Object.keys(o)) if (keys.some((x) => k.includes(x))) return o[k]; return null; };
+export const tookOffice = (s) => { const m = String(s || '').match(/(\d{1,2} \w+ \d{4})/); return m ? new Date(m[1] + ' UTC').toISOString().slice(0, 10) : null; };
 
 async function myneta(slugBase) {
   for (let y = YEAR; y >= YEAR - 6; y--) {
@@ -178,4 +174,4 @@ async function main() {
   await writeFile(path.join(OUT, 'states.json'), JSON.stringify({ generated: new Date().toISOString(), states: out }));
   log(`Wrote data/india/states.json (${out.reduce((s, x) => s + x.mlas.length, 0)} MLAs)`);
 }
-if (process.env.DEBUG_LG) { (async () => { for (const t of await wikiTables(process.env.DEBUG_LG)) console.log(t[0]?.map((c) => c.text), t[1]?.map((c) => c.text).slice(0, 6)); })(); } else main().catch((e) => { console.error(e); process.exit(1); });
+if (import.meta.url === `file://${process.argv[1]}`) main().catch((e) => { console.error(e); process.exit(1); });

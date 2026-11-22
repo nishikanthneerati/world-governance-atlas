@@ -39,15 +39,17 @@ const structure = () => window.IN.structure(app, DATA);
 const states = () => window.IN.states(app, DATA);
 const state = ([code]) => window.IN.state(app, DATA, (code || '').toUpperCase());
 const elections = () => window.IN.elections(app, DATA);
+const union = () => window.IN.union(app, DATA);
+const police = () => window.IN.police(app, DATA);
 window.IN_setStateFilter = (name) => { S.f = { ...DEFAULT_F, state: DATA.mps.find((m) => m.state.toLowerCase().replace(/&/g, 'and') === name.toLowerCase())?.state || '' }; S.title = `MPs from ${name}`; S.page = 1; };
 
 /* ---------- router ---------- */
-const routes = { '': home, home, mps, mp, services, companies, sources, structure, states, state, elections };
+const routes = { '': home, home, mps, mp, services, companies, sources, structure, states, state, elections, union, police };
 async function router() {
   const [name, ...args] = location.hash.replace(/^#\/?/, '').split('-');
   $$('.nav a').forEach((a) => a.classList.toggle('active', a.dataset.nav === name || (name === 'mp' && a.dataset.nav === 'mps') || (name === 'state' && a.dataset.nav === 'states')));
   await load();
-  if (['structure', 'states', 'state', 'elections', 'home', ''].includes(name)) await loadStates();
+  if (['structure', 'states', 'state', 'elections', 'home', '', 'union', 'police'].includes(name)) await loadStates();
   (routes[name] || home)(args);
   if (!router.keep) window.scrollTo(0, 0);
   router.keep = false;
