@@ -26,8 +26,8 @@
   const RANK_LABEL = { DGP: 'DGP / Spl. DGP', ADGP: 'Addl. DGP', IGP: 'Inspector General (IGP)', DIG: 'Deputy IG (DIG)', SP: 'SP / SSP / Commandant', ASP: 'Addl. SP', DSP: 'ASP / Dy. SP', INSP: 'Inspector', SI: 'Sub-Inspector', ASI: 'Asst. Sub-Inspector', HC: 'Head Constable', CONST: 'Constable', OTHER: 'Others', TOTAL: 'Total civil police' };
 
   async function loadAll() {
-    const [P, M, IPS, CO] = await Promise.all([json('data/india/police.json'), json('data/india/map.json'), json('data/india/ips.json'), json('data/india/collectors.json')]);
-    return { P, M, IPS: IPS || { officers: [] }, CO: CO || {}, ST: window.IN.getStates(), UN: window.IN.getUnion() || {} };
+    const [P, M, IPS, CO, PX] = await Promise.all([json('data/india/police.json'), json('data/india/map.json'), json('data/india/ips.json'), json('data/india/collectors.json'), json('data/india/police-stations/index.json')]);
+    return { P, M, IPS: IPS || { officers: [] }, CO: CO || {}, PX: PX || { states: {}, notAvailable: {} }, ST: window.IN.getStates(), UN: window.IN.getUnion() || {} };
   }
   const stateOf = (D, code) => D.ST?.states.find((s) => s.code === code);
   const officersOf = (D, code) => {
@@ -148,8 +148,8 @@
       <div class="section-head"><h2>Every rank, nationally</h2><span class="note">Civil police, sanctioned vs in position, as on ${fmt(P.asOn)}</span></div>
       ${rankLadder(N.ranks, N.womenCivil)}
       <div class="section-head" style="margin-top:36px"><h2>States & UTs</h2><span class="note">Tap a row to drill down</span></div>
-      <div class="table-wrap"><table class="mp-table"><thead><tr><th>State / UT</th><th>DGP</th><th class="n">Zones</th><th class="n">Ranges</th><th class="n">Districts</th><th class="n">Comm.</th><th class="n">Police stations</th><th class="n">Civil police</th><th class="n">Vacant</th><th class="n">Per lakh</th></tr></thead><tbody>
-        ${codes.map((c) => { const s = P.states[c], t = s.ranks?.find((r) => r.rank === 'TOTAL'), dg = (D.UN.police || []).find((x) => x.state === c); return `<tr class="rowlink" data-href="#police-${c}"><td><a href="#police-${c}"><b>${esc(stateOf(D, c)?.name || c)}</b></a></td><td>${esc(dg?.name || '')}</td><td class="n">${n(s.units?.zones)}</td><td class="n">${n(s.units?.ranges)}</td><td class="n">${n(s.units?.districts)}</td><td class="n">${n(s.commissionerates?.length)}</td><td class="n">${n(s.policeStations?.total?.a)}</td><td class="n">${n(t?.a)}</td><td class="n">${t?.s ? pct(t.v, t.s) + '%' : '—'}</td><td class="n">${s.perLakh?.civilA ?? '—'}</td></tr>`; }).join('')}
+      <div class="table-wrap"><table class="mp-table"><thead><tr><th>State / UT</th><th>DGP</th><th class="n">Zones</th><th class="n">Ranges</th><th class="n">Districts</th><th class="n">Comm.</th><th class="n">Police stations</th><th class="n">Listed by name</th><th class="n">Civil police</th><th class="n">Vacant</th><th class="n">Per lakh</th></tr></thead><tbody>
+        ${codes.map((c) => { const s = P.states[c], t = s.ranks?.find((r) => r.rank === 'TOTAL'), dg = (D.UN.police || []).find((x) => x.state === c); return `<tr class="rowlink" data-href="#police-${c}"><td><a href="#police-${c}"><b>${esc(stateOf(D, c)?.name || c)}</b></a></td><td>${esc(dg?.name || '')}</td><td class="n">${n(s.units?.zones)}</td><td class="n">${n(s.units?.ranges)}</td><td class="n">${n(s.units?.districts)}</td><td class="n">${n(s.commissionerates?.length)}</td><td class="n">${n(s.policeStations?.total?.a)}</td><td class="n">${D.PX.states[c] ? n(D.PX.states[c].count) : `<span class="muted" title="${esc(D.PX.notAvailable?.[c] || 'No public list found')}">—</span>`}</td><td class="n">${n(t?.a)}</td><td class="n">${t?.s ? pct(t.v, t.s) + '%' : '—'}</td><td class="n">${s.perLakh?.civilA ?? '—'}</td></tr>`; }).join('')}
       </tbody></table></div>
       <p class="src">Source: ${ext(P.source, P.sourceName)}, as on ${fmt(P.asOn)}; DGPs from ${ext('https://en.wikipedia.org/wiki/Director_general_of_police', 'Wikipedia')}. Counts are as reported by each state to BPR&D.</p>`;
     $$('#pm button').forEach((b) => b.addEventListener('click', () => { metricKey = b.dataset.k; draw(); }));
@@ -198,13 +198,15 @@
             ${stepCard(comms.length ? 6 : 5, 'Police districts', S.units?.districts, 'SP / SSP', `<p class="note">${Object.values(chiefs).filter((x) => x.length).length} district police chiefs named below, from the IPS list.</p>`)}
             ${stepCard(comms.length ? 7 : 6, 'Sub-divisions', S.units?.subDivisions, 'DSP / ASP', '')}
             ${S.units?.circles ? stepCard(comms.length ? 8 : 7, 'Circles', S.units.circles, 'Circle Inspector', '') : ''}
-            ${stepCard('▾', 'Police stations', S.policeStations?.total?.a, 'SHO', `<p class="note">${n(S.policeStations?.rural?.a)} rural · ${n(S.policeStations?.urban?.a)} urban · ${n(S.policeStations?.special?.a)} special-purpose (women, cyber, SC/ST, traffic …)${PS ? ` · <b>${n(PS.stations.length)} listed by name</b>` : ''}</p>`)}
+            ${stepCard('▾', 'Police stations', S.policeStations?.total?.a, 'SHO', `<p class="note">${n(S.policeStations?.rural?.a)} rural · ${n(S.policeStations?.urban?.a)} urban · ${n(S.policeStations?.special?.a)} special-purpose (women, cyber, SC/ST, traffic …)${PS ? ` · <b>${n(PS.stations.length)} listed by name</b>, with contacts, in the district pages` : ''}</p>${!PS ? `<p class="note">No station-by-station list yet: ${esc(D.PX.notAvailable?.[code] || 'no public list found on the state police website.')}</p>` : ''}`)}
             ${stepCard('▾', 'Outposts', S.outposts?.total?.a, 'ASI / HC', '')}
           </div>
         </div>
       </div>
       <div class="section-head" style="margin-top:28px" id="pdists"><h2>Districts${comms.length ? ' & commissionerates' : ''}</h2><span class="note">${dists.length} revenue districts · ${n(S.units?.districts)} police districts reported</span></div>
       <div class="district-grid">${dists.map((d) => { const c = chiefs[d.name]; const cm = commOf(comms, d.name); const k = stationsByDist?.[d.name]?.length; return `<a class="district dlink" href="#police-${code}-${encodeURIComponent(d.name)}"><b>${esc(d.name)}</b>${cm ? `<span class="dc">Commissionerate${cm.cp[0] ? `: ${esc(cm.cp[0].name)}${cm.cp[0].batch ? ` · IPS ${cm.cp[0].batch}` : ''}` : ''}</span>` : ''}${c.length ? `<span class="dc">${esc(c[0].post.split(',')[0])}: ${esc(c[0].name)}${c[0].batch ? ` · IPS ${c[0].batch}` : ''}</span>` : cm ? '' : '<span class="dc muted">SP not in IPS list</span>'}${k ? `<span>${k} police stations</span>` : ''}</a>`; }).join('')}</div>
+      ${(() => { if (!stationsByDist) return ''; const other = Object.entries(stationsByDist).filter(([k]) => !dists.some((d) => d.name === k)); return other.length ? `<div class="section-head" style="margin-top:28px"><h2>Other police units</h2><span class="note">Railway police and units not tied to one district</span></div>
+        <div class="district-grid">${other.map(([k, list]) => `<div class="district"><b>${esc(k)}</b><span>${list.length} police station${list.length > 1 ? 's' : ''}: ${esc(list.slice(0, 4).map((s) => s.name).join(', '))}${list.length > 4 ? '…' : ''}</span></div>`).join('')}</div>` : ''; })()}
       <div class="section-head" style="margin-top:36px"><h2>Every rank in ${esc(st.name)} Police</h2><span class="note">Civil police as on ${fmt(D.P.asOn)}</span></div>
       ${rankLadder(S.ranks, S.womenCivil)}
       <p class="src">Units, stations, ranks and ratios: ${ext(D.P.source, D.P.sourceName)} (as on ${fmt(D.P.asOn)}). Officers: ${ext(D.IPS.source || 'https://www.mha.gov.in', 'MHA IPS Civil List')} (posts as on 1 January; postings change during the year).${CADRE_OF[code] ? ` ${esc(st.name)} draws officers from the joint ${esc(CADRE_OF[code])} cadre; only those whose post names a place in ${esc(st.name)} are shown.` : ''}${PS ? ` Police stations: ${ext(PS.source, PS.sourceName || 'state police website')}.` : ''}</p>`;
@@ -248,12 +250,12 @@
     $('#dmap').innerHTML = mapSvg(D, { focus: code, dots, active: d.name });
     bindMap($('#dmap'), (c) => { location.hash = `#police-${c}`; }, (x) => { location.hash = `#police-${code}-${encodeURIComponent(x)}`; });
     if (stations.length) {
-      const cols = ['subDivision', 'circle', 'phone', 'email', 'address'].filter((k) => stations.some((s) => s[k]));
-      const label = { subDivision: 'Sub-division', circle: 'Circle', phone: 'Phone', email: 'Email', address: 'Address' };
+      const cols = ['unit', 'subDivision', 'circle', 'incharge', 'phone', 'mobile', 'email', 'address', 'jurisdiction'].filter((k) => stations.some((s) => s[k]));
+      const label = { unit: 'Police district', subDivision: 'Sub-division', circle: 'Circle', incharge: 'Officer in charge', phone: 'Office phone', mobile: 'Official mobile', email: 'Email', address: 'Address', jurisdiction: 'Jurisdiction (areas covered)' };
       const draw = () => {
         const q = ($('#ps-q').value || '').toLowerCase();
         const rows = stations.filter((s) => !q || Object.values(s).join(' ').toLowerCase().includes(q));
-        $('#ps-t').innerHTML = `<div class="table-wrap"><table class="mp-table"><thead><tr><th>Police station</th>${cols.map((k) => `<th>${label[k]}</th>`).join('')}</tr></thead><tbody>${rows.map((s) => `<tr><td><b>${esc(s.name)}</b></td>${cols.map((k) => `<td class="${k === 'phone' ? 'num' : ''}">${esc(s[k] || '')}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${cols.length + 1}" class="empty">No match</td></tr>`}</tbody></table></div>`;
+        $('#ps-t').innerHTML = `<div class="table-wrap"><table class="mp-table"><thead><tr><th>Police station</th>${cols.map((k) => `<th>${label[k]}</th>`).join('')}</tr></thead><tbody>${rows.map((s) => `<tr><td><b>${esc(s.name)}</b></td>${cols.map((k) => `<td class="${['phone', 'mobile'].includes(k) ? 'num' : ''}"${k === 'jurisdiction' ? ' style="max-width:360px;font-size:12px"' : ''}>${k === 'email' && s.email ? `<a href="mailto:${esc(s.email)}">${esc(s.email)}</a>` : esc(s[k] || '')}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${cols.length + 1}" class="empty">No match</td></tr>`}</tbody></table></div>`;
       };
       $('#ps-q').addEventListener('input', draw); draw();
     }
