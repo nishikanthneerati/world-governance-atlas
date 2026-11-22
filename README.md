@@ -50,3 +50,7 @@ To enable it: push to GitHub, open **Settings → Pages**, and set **Source** to
 - **More curated firsts**: copy the `IND` block in `curated/firsts.json` under another ISO3 code. `wiki` must be an English Wikipedia title; the build adds the photo and description and warns about titles that don't exist.
 - **More indicators**: add a row to `INDICATORS` in `scripts/fetch-data.mjs` (any World Bank indicator code). The UI picks it up automatically.
 - **Data files**: `data/index.json` holds the country list with latest values, `data/people.json` is the leader search index, and `data/countries/<ISO3>.json` holds the full record per country.
+
+## Who Runs India
+
+`india.html`: governance structure, states & UTs (CMs, Governors, MLAs), MPs, election calendar. Data: `scripts/fetch-india.mjs`, `scripts/fetch-states.mjs`.
