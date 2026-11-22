@@ -128,6 +128,38 @@ async function councils() {
   return by;
 }
 
+async function vicePresident() {
+  const html = await wikiHtml('Vice President of India');
+  const ib = html.match(/<table class="infobox[\s\S]*?<\/table>/)?.[0] || '';
+  const m = text(ib).match(/Incumbent\s+(.+?)\s+since\s+(\d{1,2} \w+ \d{4})/);
+  return m ? { name: m[1].trim(), since: tookOffice(m[2]), wiki: m[1].trim() } : null;
+}
+
+async function municipal() {
+  const secs = await sections('List of municipal corporations in India');
+  const list = [];
+  for (const s of secs) {
+    const h = headOf(s.table);
+    if (!/corporation/.test(h) || !/ward/.test(h)) continue;
+    const code = stateFor(s.heading);
+    for (const r of rowsAsObjects(s.table)) {
+      const n = pick(r, 'corporation');
+      if (!n?.text) continue;
+      list.push({ name: n.text, wiki: n.link, state: code, district: pick(r, 'district')?.text || null, wards: +(pick(r, 'ward')?.text || '').replace(/\D/g, '') || null, established: pick(r, 'established')?.text || null, lastElection: pick(r, 'last election')?.text || null, population: +(pick(r, 'population')?.text || '').replace(/\D/g, '') || null });
+    }
+  }
+  log(`  municipal corporations: ${list.length}`);
+  return list;
+}
+
+async function judges() {
+  const secs = await sections('List of sitting judges of the Supreme Court of India');
+  const t = secs.map((s) => s.table).find((t) => /name/.test(headOf(t)) && /retirement/.test(headOf(t)));
+  const list = t ? rowsAsObjects(t).map((r) => { const n = pick(r, 'name', 'judge'); return n?.text && !/^\d+$/.test(n.text) ? { name: clean(n.text), wiki: n.link, since: tookOffice(pick(r, 'date of appointment')?.text), retires: tookOffice(pick(r, 'retirement')?.text), cjiFrom: tookOffice(pick(r, 'becomes cji')?.text), parentHC: pick(r, 'parent high court')?.text || null } : null; }).filter(Boolean) : [];
+  log(`  Supreme Court judges: ${list.length}`);
+  return list;
+}
+
 async function main() {
   await mkdir(OUT, { recursive: true });
   const prev = existsSync(path.join(OUT, 'union.json')) ? JSON.parse(await readFile(path.join(OUT, 'union.json'), 'utf8')) : {};
@@ -137,7 +169,10 @@ async function main() {
   const rs = await rajyaSabha(); await sleep(1500);
   const dg = await dgps(); await sleep(1500);
   const ds = await districts(); await sleep(1500);
-  const mlc = await councils();
+  const mlc = await councils(); await sleep(1500);
+  const vp = await vicePresident(); await sleep(1500);
+  const mc = await municipal(); await sleep(1500);
+  const sc = await judges();
   const out = {
     generated: new Date().toISOString(),
     ministrySource: m.source || prev.ministrySource,
@@ -146,6 +181,9 @@ async function main() {
     police: keep(dg, prev.police),
     districts: keep(ds, prev.districts),
     councils: keep(mlc, prev.councils),
+    vicePresident: vp || prev.vicePresident || null,
+    municipalCorporations: keep(mc, prev.municipalCorporations),
+    supremeCourt: keep(sc, prev.supremeCourt),
   };
   await writeFile(path.join(OUT, 'union.json'), JSON.stringify(out));
   log('Wrote data/india/union.json');

@@ -54,3 +54,4 @@ To enable it: push to GitHub, open **Settings → Pages**, and set **Source** to
 ## Who Runs India
 
 `india.html`: governance structure, states & UTs (CMs, Governors, MLAs), MPs, election calendar. Data: `scripts/fetch-india.mjs`, `scripts/fetch-states.mjs`.
+- IPS officers: `python3 scripts/parse_ips_civil_list.py` (needs pdftotext). MHA republishes the Civil List every January, so run this once a year.

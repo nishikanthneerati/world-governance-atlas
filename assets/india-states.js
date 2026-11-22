@@ -17,6 +17,54 @@
   const wl = (p) => (p.wiki ? `<a href="${wiki(p.wiki)}" target="_blank" rel="noopener">${esc(p.name)}</a>` : esc(p.name));
   const smallTable = (cols, rows) => `<div class="table-wrap"><table class="mp-table"><thead><tr>${cols.map((c) => `<th>${c}</th>`).join('')}</tr></thead><tbody>${rows.join('') || `<tr><td colspan="${cols.length}" class="empty">None listed</td></tr>`}</tbody></table></div>`;
 
+  let IPS = null;
+  const loadIps = async () => (IPS ??= await fetch('data/india/ips.json').then((r) => r.json()).catch(() => ({ officers: [] })));
+  // Which IPS cadre serves each state/UT
+  const CADRE_OF = { AR: 'AGMUT', GA: 'AGMUT', MZ: 'AGMUT', DL: 'AGMUT', JK: 'AGMUT', LA: 'AGMUT', PY: 'AGMUT', AN: 'AGMUT', CH: 'AGMUT', DN: 'AGMUT', LD: 'AGMUT', AS: 'Assam-Meghalaya', ML: 'Assam-Meghalaya' };
+  const cadreOf = (st) => CADRE_OF[st.code] || st.name;
+  const RANK_RX = [['DGP', /^(Spl\.?\s*)?DGP\b|Director General|^DG\b/i], ['ADGP', /^(ADGP|Addl\.?\s*DGP|Additional DGP)/i], ['IGP', /^(IGP|IG\b|Inspector General)/i], ['DIG', /^(DIG|Dy\.?\s*IG)/i], ['SP / SSP', /^(SP|SSP|Sr\.?\s*SP|Superintendent|District Police Chief)/i], ['Commissioner', /^(CP|Commissioner of Police|Jt\.?\s*CP|Addl\.?\s*CP|DCP)/i], ['Training', /Under Training|Probation/i]];
+  const rankOf = (post) => (RANK_RX.find(([, rx]) => rx.test(post || '')) || ['Other'])[0];
+  const isDistrictChief = (o) => /^(SP|SSP|Sr\.?\s*SP|District Police Chief|Superintendent of Police)\b/i.test(o.post || '') && !/(CID|CB|Crime|Intelligence|Vigilance|Railway|Rly|Training|Special|Security|Cyber|Traffic|SCRB|STF|Armed|Battalion|Bn|ATS|EOW|ACB|Commandant|AIG|Staff|Headquarters|HQ)/i.test(o.post || '');
+  const OF = { q: '', cadre: '', rank: '', from: '', to: '', page: 1 };
+
+  async function officers(app) {
+    document.title = 'Officers · Who Runs India';
+    app.innerHTML = '<div class="loading">Loading the IPS civil list…</div>';
+    const D = await loadIps();
+    const O = D.officers;
+    const cadres = [...new Set(O.map((o) => o.cadre).filter(Boolean))].sort();
+    const ranks = [...RANK_RX.map((r) => r[0]), 'Other'];
+    app.innerHTML = `
+      <div class="screener-head"><div><div class="eyebrow">Civil services</div><h1>IPS officers</h1>
+      <p class="muted" style="margin-top:6px">All ${O.length.toLocaleString('en-IN')} Indian Police Service officers in the official Civil List (as on 1 January ${D.generated?.slice(0, 4) || ''}), with cadre, batch and present posting.</p></div><span class="note" id="o-count"></span></div>
+      <div class="filters">
+        <input class="input" type="search" id="o-q" placeholder="Name or posting (e.g. Commissioner, Kannur)" value="${esc(OF.q)}">
+        <select id="o-c" aria-label="Cadre"><option value="">All cadres</option>${cadres.map((c) => `<option ${c === OF.cadre ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>
+        <select id="o-r" aria-label="Rank"><option value="">Any rank</option>${ranks.map((r) => `<option ${r === OF.rank ? 'selected' : ''}>${r}</option>`).join('')}</select>
+        <input class="input" id="o-from" type="number" min="1960" max="2030" placeholder="Batch from" value="${esc(OF.from)}" style="width:120px">
+        <input class="input" id="o-to" type="number" min="1960" max="2030" placeholder="Batch to" value="${esc(OF.to)}" style="width:120px">
+      </div>
+      <div class="table-wrap"><table class="mp-table"><thead><tr><th>Officer</th><th>Cadre</th><th class="n">Batch</th><th>Present post</th><th>Since</th><th>Pay</th><th>Home state</th><th class="n">Medals</th></tr></thead><tbody id="o-body"></tbody></table></div>
+      <div class="pager" id="o-pager"></div>
+      <p class="src">Source: ${ext(D.source, 'Ministry of Home Affairs, IPS Civil List')}. Postings change through the year; the list is republished each January. RR = direct recruit (UPSC), SPS = promoted from the State Police Service.</p>
+      <div class="card" style="margin-top:28px"><div class="eyebrow">IAS, IRS and IFoS</div><p style="margin-top:6px">The IAS record (DoPT) only answers requests from inside India. It will be added from a computer in India using the setup prompt prepared earlier.</p></div>`;
+    const draw = () => {
+      const q = OF.q.toLowerCase();
+      const rows = O.filter((o) => (!q || `${o.name} ${o.post} ${o.home}`.toLowerCase().includes(q)) && (!OF.cadre || o.cadre === OF.cadre) && (!OF.rank || rankOf(o.post) === OF.rank) && (!OF.from || (o.batch && o.batch >= +OF.from)) && (!OF.to || (o.batch && o.batch <= +OF.to)));
+      const per = 50, pages = Math.max(1, Math.ceil(rows.length / per));
+      OF.page = Math.min(OF.page, pages);
+      $('#o-count').textContent = `${rows.length.toLocaleString('en-IN')} officers`;
+      $('#o-body').innerHTML = rows.slice((OF.page - 1) * per, OF.page * per).map((o) => `<tr><td><b>${esc(o.name)}</b><small class="muted" style="display:block">${esc(o.source || '')}${o.education ? ` · ${esc(o.education)}` : ''}</small></td><td>${esc(o.cadre || '')}</td><td class="n">${o.batch || '—'}</td><td>${esc(o.post || '')}</td><td class="num">${o.since ? fmt(o.since) : ''}</td><td>${esc((o.level || '').replace('Level ', 'L'))}</td><td>${esc(o.home || '')}</td><td class="n">${o.medals.length || ''}</td></tr>`).join('') || '<tr><td colspan="8" class="empty">No officers match</td></tr>';
+      const pg = []; for (let p = 1; p <= pages; p++) if (p === 1 || p === pages || Math.abs(p - OF.page) <= 2) pg.push(p); else if (pg[pg.length - 1] !== '…') pg.push('…');
+      $('#o-pager').innerHTML = pages > 1 ? pg.map((p) => (p === '…' ? '<span>…</span>' : `<button class="${p === OF.page ? 'on' : ''}" data-p="${p}">${p}</button>`)).join('') : '';
+      $$('#o-pager button').forEach((b) => b.addEventListener('click', () => { OF.page = +b.dataset.p; draw(); }));
+    };
+    const set = (k) => (e) => { OF[k] = e.target.value; OF.page = 1; draw(); };
+    $('#o-q').addEventListener('input', set('q')); $('#o-c').addEventListener('change', set('cadre')); $('#o-r').addEventListener('change', set('rank'));
+    $('#o-from').addEventListener('input', set('from')); $('#o-to').addEventListener('input', set('to'));
+    draw();
+  }
+
   /* ---------------------------------------------------------------- union government */
   let rsFilter = { state: '', party: '', q: '' };
   function union(app, D) {
@@ -33,10 +81,14 @@
       <p class="muted" style="margin-top:6px">The President, the Prime Minister and ${M.length} ministers in the Union Council of Ministers, plus all ${RS.length} members of the Rajya Sabha.</p></div></div>
       <div class="grid g3" style="margin:20px 0">
         <a class="now-card" href="index.html#country-IND-leaders"><span class="avatar lg">DM</span><div><div class="t">President of India</div><div class="n">Droupadi Murmu</div><div class="s">Head of state · since 25 Jul 2022</div></div></a>
+        ${UN.vicePresident ? `<a class="now-card" href="${wiki(UN.vicePresident.wiki)}" target="_blank" rel="noopener"><span class="avatar lg">${ini(UN.vicePresident.name)}</span><div><div class="t">Vice-President of India</div><div class="n">${esc(UN.vicePresident.name)}</div><div class="s">Chairs the Rajya Sabha · since ${fmt(UN.vicePresident.since)}</div></div></a>` : ''}
         <a class="now-card" href="#mp-4589">${face({ name: 'Narendra Modi', img: 'data/india/photos/4589.jpg' }, 'avatar lg')}<div><div class="t">Prime Minister</div><div class="n">Narendra Modi</div><div class="s">Head of government · since 26 May 2014</div></div></a>
-        <a class="now-card" href="#elections"><span class="avatar lg">${M.length}</span><div><div class="t">Union Council of Ministers</div><div class="n">${M.filter((m) => m.rank === ranks[0]).length} Cabinet · ${M.filter((m) => m.rank !== ranks[0]).length} MoS</div><div class="s">${esc(UN.ministrySource || '')}</div></div></a>
+        <a class="now-card" href="#union"><span class="avatar lg">${M.length}</span><div><div class="t">Union Council of Ministers</div><div class="n">${M.filter((m) => m.rank === ranks[0]).length} Cabinet · ${M.filter((m) => m.rank !== ranks[0]).length} MoS</div><div class="s">${esc(UN.ministrySource || '')}</div></div></a>
       </div>
       ${ranks.map((r) => { const list = M.filter((m) => m.rank === r); return list.length ? `<div class="cat-head"><h3>${r}s</h3><span class="pill">${list.length}</span></div><div class="grid g3">${list.map(minCard).join('')}</div>` : ''; }).join('')}
+      ${(UN.supremeCourt || []).length ? `<div class="section-head" style="margin-top:40px"><h2>Supreme Court</h2><span class="note">${UN.supremeCourt.length} judges</span></div>
+        ${smallTable(['Judge', 'Appointed', 'Retires', 'Chief Justice from', 'Parent High Court'], UN.supremeCourt.map((j) => `<tr><td><b>${wl(j)}</b></td><td class="num">${fmt(j.since)}</td><td class="num">${fmt(j.retires)}</td><td class="num">${fmt(j.cjiFrom)}</td><td>${esc(j.parentHC || '')}</td></tr>`))}
+        <p class="src">From ${ext(wiki('List of sitting judges of the Supreme Court of India'), 'Wikipedia: sitting judges of the Supreme Court')}; official list at ${ext('https://www.sci.gov.in/chief-justice-judges/', 'sci.gov.in')}. "Chief Justice from" shows the date each judge would become CJI by seniority.</p>` : ''}
       <div class="section-head" style="margin-top:40px"><h2>Rajya Sabha (Council of States)</h2><span class="note" id="rs-count"></span></div>
       <div class="filters"><input class="input" type="search" id="rs-q" placeholder="Name"><select id="rs-s" aria-label="State"><option value="">All states</option>${rsStates.map((x) => `<option>${esc(x)}</option>`).join('')}</select><select id="rs-p" aria-label="Party"><option value="">All parties</option>${rsParties.map((x) => `<option>${esc(x)}</option>`).join('')}</select></div>
       <div id="rs-table"></div>
@@ -80,7 +132,7 @@
       <div class="tier-nav"><a href="#t-union">Union</a><a href="#t-state">State</a><a href="#t-district">District</a><a href="#t-rural">Rural local</a><a href="#t-urban">Urban local</a><a href="#t-police">Police</a><a href="#t-courts">Courts</a><a href="#t-elections">Who runs elections</a></div></div>
       <div id="t-union">${tier('1 · Union (national) government', [
         ['President', 'Head of state. Elected for 5 years by an electoral college of all elected MPs and MLAs.', 'Droupadi Murmu', 'index.html#country-IND-leaders'],
-        ['Vice-President', 'Elected for 5 years by all MPs. Chairs the Rajya Sabha.', null],
+        ['Vice-President', 'Elected for 5 years by all MPs. Chairs the Rajya Sabha.', UN.vicePresident?.name || null, '#union'],
         ['Prime Minister & Union Council of Ministers', 'The PM leads the party or coalition with a Lok Sabha majority. Ministers are appointed by the President on the PM\'s advice and must be MPs within 6 months.', `${(UN.ministers || []).length} ministers`, '#union'],
         ['Lok Sabha (House of the People)', `543 elected seats, one per constituency, for 5 years. ${D.mps.length} members sitting now.`, `${D.mps.length} MPs`, '#mps'],
         ['Rajya Sabha (Council of States)', 'Up to 250 members: elected by state MLAs plus 12 nominated by the President. 6-year terms; one-third retire every 2 years, so it is never dissolved.', `${(UN.rajyaSabha || []).length} members`, '#union'],
@@ -108,7 +160,7 @@
         ['Gram Sabha', 'Every adult voter in the village. Approves plans and audits the Panchayat.', null],
       ], 'Set up by the 73rd Constitutional Amendment (1992). 5-year terms; at least one-third of seats reserved for women (50% in many states), with SC/ST reservation.')}</div>
       <div id="t-urban">${tier('5 · Urban local government', [
-        ['Municipal Corporation', 'Large cities. Elected councillors (corporators) and a Mayor; a Municipal Commissioner (IAS) runs the administration.', null],
+        ['Municipal Corporation', 'Large cities. Elected councillors (corporators) and a Mayor; a Municipal Commissioner (IAS) runs the administration.', `${(UN.municipalCorporations || []).length} corporations`, '#states'],
         ['Municipal Council (Nagar Palika)', 'Smaller cities and towns, led by a Chairperson.', null],
         ['Nagar Panchayat', 'Areas moving from rural to urban.', null],
         ['Ward', 'Each city is divided into wards, each electing one councillor.', null],
@@ -116,13 +168,13 @@
       <div id="t-police">${tier('6 · Police ranks (state police)', [
         ['DGP', 'Director General of Police: head of the state force.', null],
         ['ADGP → IGP → DIG', 'Additional DGP, Inspector General and Deputy Inspector General: zones and ranges.', null],
-        ['SP / SSP', 'Superintendent of Police: heads a district.', null],
+        ['SP / SSP', 'Superintendent of Police: heads a district.', 'by state', '#services'],
         ['ASP / DSP', 'Additional or Deputy Superintendent: sub-division.', null],
         ['Inspector (SHO)', 'Usually the Station House Officer in charge of a police station.', null],
         ['Sub-Inspector → ASI → Head Constable → Constable', 'Station-level ranks.', null],
       ], 'Police is a state subject. Officers from DSP upward are mostly from the IPS or the State Police Service.')}</div>
       <div id="t-courts">${tier('7 · Courts', [
-        ['Supreme Court', 'Chief Justice of India and up to 33 other judges.', null],
+        ['Supreme Court', 'Chief Justice of India and the other judges, appointed by the President on the collegium\'s recommendation.', `${(UN.supremeCourt || []).length} judges`, '#union'],
         ['High Courts', '25 High Courts, some covering more than one state or UT.', null],
         ['District & Sessions Courts', 'Civil and criminal courts in each district, with subordinate courts below.', null],
       ])}</div>
@@ -209,6 +261,11 @@
           <p class="src">From ${ext(wiki(`${s.name} Legislative Council`), `Wikipedia: ${s.name} Legislative Council`)}.</p>` : ''}
         <div class="section-head" style="margin-top:36px" id="rsm"><h2>Rajya Sabha members from ${esc(s.name)}</h2></div>
         ${smallTable(['Member', 'Party', 'Term'], rs.map((x) => `<tr><td><b>${wl(x)}</b></td><td><span class="ptag">${esc(x.party || '—')}</span></td><td class="num">${esc(x.termStart || '')} – ${esc(x.termEnd || '')}</td></tr>`))}
+        ${(() => { const mc = (UN.municipalCorporations || []).filter((x) => x.state === s.code); return mc.length ? `<div class="section-head" style="margin-top:36px"><h2>Municipal corporations</h2><span class="note">${mc.length} city corporations</span></div>
+          ${smallTable(['Corporation', 'District', 'Wards', 'Population (2011)', 'Last election'], mc.map((x) => `<tr><td><b>${x.wiki ? `<a href="${wiki(x.wiki)}" target="_blank" rel="noopener">${esc(x.name)}</a>` : esc(x.name)}</b></td><td>${esc(x.district || '')}</td><td class="num">${x.wards || ''}</td><td class="num">${x.population ? x.population.toLocaleString('en-IN') : ''}</td><td class="num">${esc(x.lastElection || '')}</td></tr>`))}
+          <p class="src">From ${ext(wiki('List of municipal corporations in India'), 'Wikipedia: municipal corporations in India')}. Municipal councils and nagar panchayats are not listed yet.</p>` : ''; })()}
+        <div class="section-head" style="margin-top:36px" id="ips-sec"><h2>Police leadership (IPS)</h2><span class="note" id="ips-note">Loading…</span></div>
+        <div id="ips-box"></div>
         <div class="section-head" style="margin-top:36px" id="dists"><h2>Districts of ${esc(s.name)}</h2><span class="note">${ds.length} districts</span></div>
         <div class="district-grid">${ds.map((d) => `<div class="district"><b>${d.wiki ? `<a href="${wiki(d.wiki)}" target="_blank" rel="noopener">${esc(d.name)}</a>` : esc(d.name)}</b>${d.hq && d.hq !== d.name ? `<span>HQ ${esc(d.hq)}</span>` : ''}</div>`).join('')}</div>
         <p class="src">From ${ext(wiki('List of districts in India'), 'Wikipedia: List of districts in India')}. Collectors and SPs for each district are coming with the officer data.</p>`;
@@ -229,6 +286,21 @@
       <p class="src">Leaders from Wikipedia (${ext(wiki('Chief minister (India)'), 'Chief Ministers')}, ${ext(wiki('List of current Indian lieutenant governors and administrators'), 'Governors')}); assembly sizes from ${ext(wiki('State legislative assemblies of India'), 'Wikipedia')}.</p>`;
     $('#state-mps')?.addEventListener('click', () => window.IN_setStateFilter?.(s.name));
     if (s.mlas.length) mlaTable(s);
+    loadIps().then((D) => {
+      const cad = cadreOf(s);
+      const all = D.officers.filter((o) => o.cadre === cad);
+      const dn = ((UN.districts || {})[s.code] || []).map((d) => d.name.replace(/ district$/i, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+      const distRx = dn.length ? new RegExp(`^(SP|SSP|Sr\\.?\\s*SP|Superintendent of Police)[,\\s]+(${dn.join('|')})\\b`, 'i') : null;
+      const chiefs = all.filter((o) => isDistrictChief(o) && (/District Police Chief/i.test(o.post) || (distRx && distRx.test(o.post))));
+      const top = all.filter((o) => ['DGP', 'ADGP'].includes(rankOf(o.post)));
+      const box = $('#ips-box'); if (!box) return;
+      $('#ips-note').textContent = `${all.length} IPS officers in the ${cad} cadre`;
+      box.innerHTML = `${top.length ? `<h3 style="margin:4px 0 10px">DGP & ADGP rank</h3>${smallTable(['Officer', 'Post', 'Batch'], top.map((o) => `<tr><td><b>${esc(o.name)}</b></td><td>${esc(o.post)}</td><td class="num">${o.batch || ''}</td></tr>`))}` : ''}
+        ${chiefs.length ? `<h3 style="margin:20px 0 10px">District police chiefs (SP / SSP)</h3>${smallTable(['Officer', 'Post', 'Batch', 'Since'], chiefs.map((o) => `<tr><td><b>${esc(o.name)}</b></td><td>${esc(o.post)}</td><td class="num">${o.batch || ''}</td><td class="num">${o.since ? fmt(o.since) : ''}</td></tr>`))}` : ''}
+        <p class="note" style="margin-top:10px"><a href="#services" id="ips-all">Open all ${all.length} officers of this cadre in the IPS screener →</a></p>
+        <p class="src">From the ${ext(D.source, 'MHA IPS Civil List')} (as on 1 January). ${cad === 'AGMUT' ? 'AGMUT is a joint cadre for Arunachal, Goa, Mizoram and the Union Territories, so officers here may serve any of them.' : ''} District SPs from the State Police Service are not in this list.</p>`;
+      $('#ips-all')?.addEventListener('click', () => { Object.assign(OF, { q: '', cadre: cad, rank: '', from: '', to: '', page: 1 }); });
+    });
   }
   const f = (k, v) => (v || v === 0 ? `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>` : '');
 
@@ -277,5 +349,5 @@
 
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
-  window.IN = { loadStates, structure, states, state, elections, union, police, getStates: () => ST, getUnion: () => UN };
+  window.IN = { loadStates, structure, states, state, elections, union, police, officers, getStates: () => ST, getUnion: () => UN };
 })();

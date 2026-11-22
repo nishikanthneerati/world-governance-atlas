@@ -44,12 +44,12 @@ const police = () => window.IN.police(app, DATA);
 window.IN_setStateFilter = (name) => { S.f = { ...DEFAULT_F, state: DATA.mps.find((m) => m.state.toLowerCase().replace(/&/g, 'and') === name.toLowerCase())?.state || '' }; S.title = `MPs from ${name}`; S.page = 1; };
 
 /* ---------- router ---------- */
-const routes = { '': home, home, mps, mp, services, companies, sources, structure, states, state, elections, union, police };
+const routes = { '': home, home, mps, mp, services: () => window.IN.officers(app), companies, sources, structure, states, state, elections, union, police };
 async function router() {
   const [name, ...args] = location.hash.replace(/^#\/?/, '').split('-');
   $$('.nav a').forEach((a) => a.classList.toggle('active', a.dataset.nav === name || (name === 'mp' && a.dataset.nav === 'mps') || (name === 'state' && a.dataset.nav === 'states')));
   await load();
-  if (['structure', 'states', 'state', 'elections', 'home', '', 'union', 'police'].includes(name)) await loadStates();
+  if (['structure', 'states', 'state', 'elections', 'home', '', 'union', 'police', 'services'].includes(name)) await loadStates();
   (routes[name] || home)(args);
   if (!router.keep) window.scrollTo(0, 0);
   router.keep = false;
@@ -94,7 +94,7 @@ function home() {
       <a class="cat" href="#states"><span class="st live"><span class="live-dot"></span>Live · 36 states & UTs</span><span class="n">${window.IN.getStates()?.states.reduce((a, x) => a + x.mlas.length, 0).toLocaleString('en-IN')}</span><span class="t">States, CMs, Governors & MLAs</span><span class="d">Every Chief Minister, Deputy CM, Governor and MLA, with assets, criminal cases and the next election date.</span><span class="go">Open states →</span></a>
       <a class="cat" href="#mps"><span class="st live"><span class="live-dot"></span>Live · Lok Sabha</span><span class="n">${M.length}</span><span class="t">Members of Parliament</span><span class="d">18th Lok Sabha. Filter by state, party, education, assets and criminal cases.</span><span class="go">Open MP screener →</span></a>
       <a class="cat" href="index.html#country-IND-leaders"><span class="st live"><span class="live-dot"></span>Live · Since 1947</span><span class="n">18</span><span class="t">Prime Ministers & Presidents</span><span class="d">Every PM and President with terms, tenure and party, from Nehru and Rajendra Prasad to today.</span><span class="go">Open timeline →</span></a>
-      <a class="cat soon" href="#services"><span class="st">Next · DoPT / MHA</span><span class="n">IAS · IPS</span><span class="t">Civil services</span><span class="d">IAS, IPS, IRS and IFoS officers with postings, batches and cadres. Source access in progress.</span><span class="go">See plan →</span></a>
+      <a class="cat" href="#services"><span class="st live"><span class="live-dot"></span>Live · MHA Civil List</span><span class="n">IPS</span><span class="t">Police officers</span><span class="d">Every IPS officer with cadre, batch and present posting. IAS comes next.</span><span class="go">Open officer screener →</span></a>
       <a class="cat soon" href="#companies"><span class="st">Next · NSE filings</span><span class="n">CEOs</span><span class="t">Companies & CEOs</span><span class="d">Leaders of India's largest listed companies, from stock-exchange filings and annual reports.</span><span class="go">See plan →</span></a>
     </section>
 
