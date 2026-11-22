@@ -8,6 +8,7 @@
  *   ONLY=KA,BR node scripts/fetch-police-stations.mjs
  */
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
+import { writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
@@ -215,8 +216,46 @@ A.WB = async () => {
     const ph = text(c[2]).split('/').map((x) => x.trim());
     out.push({ name: `${text(c[0])} PS`, unit: 'Kolkata', phone: ph.find((x) => /^033/.test(x)) || null, mobile: ph.find((x) => /^[6-9]\d{9}$/.test(x.replace(/\s/g, ''))) || null, email: email(text(c[5])) });
   }
-  return { source: url, sourceName: 'Kolkata Police contacts (West Bengal state police districts not yet included)', rows: out };
+  out.push(...wbState());
+  return { source: 'https://wbpolice.gov.in/WBP/Common/WBP_SubUnit_List.aspx?IsKYP=True', sourceName: 'West Bengal Police "Know your police station" + Kolkata Police contacts', rows: out };
 };
+
+// West Bengal Police "Know your police station": ASP.NET cascading dropdowns (unit type > police district > PS).
+// The view state is too large for a command line, so each form body goes through a temp file.
+function wbState() {
+  const url = 'https://wbpolice.gov.in/WBP/Common/WBP_SubUnit_List.aspx?IsKYP=True';
+  const jar = path.join(os.tmpdir(), `wbpolice-${process.pid}.jar`), bodyFile = path.join(os.tmpdir(), `wbpolice-${process.pid}.body`);
+  const curl = (args) => { for (let i = 0; i < 3; i++) { try { return execFileSync('curl', ['-sS', '-m', '60', '-A', UA, '-c', jar, '-b', jar, ...args], { maxBuffer: 1 << 26 }).toString('utf8'); } catch {} } return ''; };
+  const P = 'ctl00$ContentPlaceHolder1$';
+  const hv = (h, id) => decode((h.match(new RegExp(`id="${id}" value="([^"]*)"`)) || [])[1] || '');
+  const opts = (h, name) => { const i = h.indexOf(`name="${name}"`); if (i < 0) return []; return [...h.slice(i, h.indexOf('</select>', i)).matchAll(/<option[^>]*value="([^"]*)"[^>]*>([^<]*)/g)].map((m) => [m[1], decode(m[2]).trim()]).filter(([v]) => v && !/select/i.test(v)); };
+  const post = (h, target, fields) => {
+    writeFileSync(bodyFile, Object.entries({ __EVENTTARGET: target, __EVENTARGUMENT: '', __LASTFOCUS: '', __VIEWSTATE: hv(h, '__VIEWSTATE'), __VIEWSTATEGENERATOR: hv(h, '__VIEWSTATEGENERATOR'), __VIEWSTATEENCRYPTED: '', ...fields }).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&'));
+    return curl(['-e', url, '--data-binary', `@${bodyFile}`, '-H', 'Content-Type: application/x-www-form-urlencoded', url]);
+  };
+  const field = (h, label) => { const t = text(h.slice(h.indexOf('Details Information'))); const m = t.match(new RegExp(`${label}\\s*:\\s*(.*?)\\s*(?:Police Unit|Police Sub Unit|Office Address|Email Id|Telephone No\\.|Mobile No\\.|Contents provided|$)`)); return m && m[1] && !/^0?$/.test(m[1]) ? m[1] : null; };
+  const out = [];
+  const h0 = curl([url]);
+  for (const type of ['02', '01', '03']) {
+    const f1 = { [P + 'ddl_unit_Type']: type };
+    const h1 = post(h0, P + 'ddl_unit_Type', f1);
+    for (const [uv, uname] of opts(h1, P + 'ddl_Unit_Name')) {
+      if (/^kolkata/i.test(uname)) continue; // Kolkata Police is taken from its own site
+      const f2 = { ...f1, [P + 'ddl_Unit_Name']: uv };
+      const h2 = post(h1, P + 'ddl_Unit_Name', f2);
+      const f3 = { ...f2, [P + 'ddl_Sub_Unit_Type']: '30' };
+      const h3 = post(h2, P + 'ddl_Sub_Unit_Type', f3);
+      const unit = type === '03' ? 'GRP' : uname.replace(/\s*Police (District|Commissionerate)\s*$/i, '').trim();
+      for (const [pv, pname] of opts(h3, P + 'ddl_Sub_Unit_Name')) {
+        const d = post(h3, P + 'ddl_Sub_Unit_Name', { ...f3, [P + 'ddl_Sub_Unit_Name']: pv });
+        const tel = field(d, 'Telephone No\\.'), mob = (field(d, 'Mobile No\\.') || '').replace(/\D/g, '');
+        out.push({ name: /\bPS$/i.test(pname) ? pname : `${pname} PS`, unit, address: field(d, 'Office Address'), phone: tel && !/^[6-9]\d{9}$/.test(tel) ? tel : null, mobile: /^[6-9]\d{9}$/.test(mob) ? mob : tel && /^[6-9]\d{9}$/.test(tel) ? tel : null, email: email(field(d, 'Email Id') || '') });
+      }
+      log(`  WB ${uname}: ${out.length} so far`);
+    }
+  }
+  return out;
+}
 
 // Haryana: statewide "Know Your Police Station" map (Google My Maps KML) with station name + district.
 A.HR = async () => {
@@ -411,11 +450,154 @@ A.TS = async () => {
   return { source: 'https://www.tspolice.gov.in/', sourceName: 'Telangana Police: know your PS', rows: out };
 };
 
-// States without an adapter yet, and why (from a survey of every state police website, Nov 2026).
+// Tripura: each of the 8 district police sites has its own contact table. The officer-in-charge's mobile is
+// usually a personal number there, so only the station landline and official e-mail are kept.
+A.TR = async () => {
+  const SITES = { 'West Tripura': 'https://westpolice.tripura.gov.in/node/96', 'North Tripura': 'https://northpolice.tripura.gov.in/contact', Dhalai: 'https://dhalaipolice.tripura.gov.in/contact', Gomati: 'https://gomatipolice.tripura.gov.in/contact', Khowai: 'https://khowaipolice.tripura.gov.in/contact', Sepahijala: 'https://sepahijalapolice.tripura.gov.in/contact%20us', 'South Tripura': 'https://southpolice.tripura.gov.in/contact', Unakoti: 'https://unakotipolice.tripura.gov.in/contact' };
+  const out = [];
+  for (const [unit, url] of Object.entries(SITES)) {
+    const h = await get(url);
+    for (const c of rows(h || '').map(cells).map((r) => r.map(text))) {
+      const t = c.join(' | ');
+      const m = t.match(/(?:\bO\/?C\b|Officer-in-?\s?Charge,?)\s+([A-Za-z][A-Za-z. ]*?)\s*(?:\bP\.?S\b\.?|Police Station)/i) || t.match(/\bOC\s+(Women)\s+PS\s+(\w+)/i);
+      if (!m) continue;
+      const name = titleCase(m[2] ? `${m[2]} ${m[1]}` : m[1]).replace(/\s+/g, ' ').trim() + ' PS';
+      // Officer's rank + name: the text before "O/C" in the matching cell, or the cells before it (rank and name may be split).
+      const k = c.findIndex((x) => /\bO\/?C\b|Officer-in-?\s?Charge/i.test(x));
+      const before = c[k].replace(/[,\s]*(?:\bO\/?C\b|Officer-in-?\s?Charge)[\s\S]*$/i, '').trim();
+      const who = [...c.slice(0, k).filter((x) => x && !/^\d+$/.test(x)), before].filter(Boolean).join(' ').replace(/^Inspr\.?\s*\(UB\)|^Inspr\.\s*\./, 'Inspr.').replace(/[\s,]+$/, '').trim();
+      const mail = (t.match(/([\w.-]+)\s*(?:@|\[at\])?\s*tripurapolice\s*\[dot\]\s*nic\s*\[dot\]\s*in/i) || [])[1];
+      const land = (t.match(/\(?0\d{3,4}\)?[-\s]?\d{3,4}[-\s]?\d{3,4}/) || [])[0] || (t.match(/(\d{3})-(\d{3})\s*\((0\d{4})\)/) || []).slice(1).reduce((a, b, i) => (i === 2 ? `${b}-${a}` : a + b), '') || null;
+      out.push({ name, unit, incharge: who && who.length < 60 && !/^(OC|O\/C)$/i.test(who) ? `${who}, Officer-in-charge` : null, phone: land && !/^[6-9]\d{9}$/.test(land.replace(/\D/g, '')) ? land.trim() : null, email: mail ? `${mail}@tripurapolice.nic.in` : email(t) });
+    }
+    await sleep(500);
+  }
+  return { source: 'https://police.tripura.gov.in/district_police', sourceName: 'Tripura district police websites (8 districts)', rows: out };
+};
+
+// Rajasthan: SCRB contact directory, an R Shiny app (no login or CAPTCHA). Its "PS Contacts" table is sent over the
+// app's SockJS websocket, so we speak that protocol directly. The table lists every staff member with a mobile;
+// only each station's office details (name, office phone, official e-mail) are kept.
+A.RJ = async () => {
+  const host = 'shinyserver.rajasthan.gov.in', app = '/cctnsco/';
+  const rnd = (n) => Math.random().toString(36).slice(2, 2 + n);
+  await get(`https://${host}${app}`); // starts an app worker, as a browser visit does
+  const data = await new Promise((resolve) => {
+    const ws = new WebSocket(`wss://${host}${app}__sockjs__/n=${rnd(18)}/${String(Math.floor(Math.random() * 1000)).padStart(3, '0')}/${rnd(8)}/websocket`);
+    const done = (v) => { clearTimeout(timer); try { ws.close(); } catch {} resolve(v); };
+    const timer = setTimeout(() => { log('  RJ: timed out'); done(null); }, 240000);
+    ws.onmessage = (e) => {
+      const d = String(e.data);
+      if (d === 'o') {
+        ws.send(JSON.stringify(['0#0|o|']));
+        ws.send(JSON.stringify(['0#0|m|' + JSON.stringify({ method: 'init', data: { rbCategory1: '5. District DCP/SP', rbCategory2: '1. Sub-Inspector & Above (All)', '.clientdata_output_resultsContacts1_hidden': true, '.clientdata_output_resultsContacts4_hidden': false, '.clientdata_output_resultsContacts4_width': 1000, '.clientdata_output_resultsContacts4_height': 400, '.clientdata_pixelratio': 1, '.clientdata_url_protocol': 'https:', '.clientdata_url_hostname': host, '.clientdata_url_port': '', '.clientdata_url_pathname': app, '.clientdata_url_search': '', '.clientdata_url_hash_initial': '', '.clientdata_url_hash': '', '.clientdata_singletons': '' } })]));
+        return;
+      }
+      if (d[0] !== 'a' || !d.includes('resultsContacts4') || !d.includes('values')) return;
+      for (const m of JSON.parse(d.slice(1))) { const j = JSON.parse(m.slice(m.indexOf('|m|') + 3)); const t = j.values?.resultsContacts4?.x?.tag?.attribs?.data; if (t) return done(t); }
+    };
+    ws.onerror = () => { log('  RJ: websocket error'); done(null); };
+  });
+  if (!data) return null;
+  const seen = new Set(), out = [];
+  data.DISTRICT_NAME.forEach((unit, i) => {
+    const p = String(data.OFFICE_DETAILS[i]).split(/<br\s*\/?>/i).map(text);
+    const key = `${unit}|${p[0]}`;
+    if (seen.has(key) || /NOT APPLICABLE/i.test(unit)) return;
+    seen.add(key);
+    const off = (p.find((x) => /\(OFF\)/i.test(x)) || '').replace(/\s*\(OFF\)/i, '').replace(/\D/g, '');
+    out.push({ name: titleCase(p[0].replace(/\s*\(PS\)$/i, '')) + ' PS', unit: /^GRP/i.test(unit) ? 'GRP' : titleCase(unit), phone: off.length >= 10 ? off.replace(/^([1-5]\d{9})$/, '0$1') : null, email: email(p.find((x) => x.includes('@')) || '') });
+  });
+  return { source: 'https://police.rajasthan.gov.in/portal/Directory', sourceName: 'Rajasthan Police (SCRB) contact directory', rows: out };
+};
+
+// Sikkim: one telephone table, "X DISTRICT" header rows, then SHO/<station> rows with official mobile + e-mail.
+A.SK = async () => {
+  const url = 'https://police.sikkim.gov.in/visitor/telephonepolice';
+  const h = await get(url);
+  const out = [];
+  let unit = null;
+  for (const c of rows(h || '').map(cells)) {
+    const t = c.map(text);
+    const head = t.find((x) => /^[A-Z ]+ DISTRICT$/.test(x));
+    if (head && t.filter(Boolean).length === 1) { unit = titleCase(head.replace(/ DISTRICT$/, '')); continue; }
+    const post = t[1] || '';
+    if (!unit || !/^SHO\s*\//i.test(post)) continue;
+    const mob = (t.slice(2).join(' ').match(/\b[6-9]\d{9}\b/) || [])[0];
+    out.push({ name: titleCase(post.replace(/^SHO\s*\/\s*/i, '')) + ' PS', unit, mobile: mob || null, email: email(t.slice(2).join(' ')) });
+  }
+  return { source: url, sourceName: 'Sikkim Police: telephone directory', rows: out };
+};
+
+// Uttarakhand: telephone directory, one accordion table per district. Only the police CUG series (9411x/9412x) is kept.
+A.UK = async () => {
+  const url = 'https://uttarakhandpolice.uk.gov.in/telephone_directory';
+  const h = (await get(url) || '').replace(/<script[\s\S]*?<\/script>/g, '');
+  const parts = h.split(/<table/i);
+  const out = [];
+  for (let i = 1; i < parts.length; i++) {
+    // The accordion title (district name) is the last text before each table.
+    const district = (text(parts[i - 1].slice(-1500)).replace(/\s*\+\s*$/, '').match(/(Udham Singh Nagar|Pauri Garhwal|Tehri Garhwal|[A-Z][A-Za-z]+)$/) || [])[1];
+    for (const c of rows(parts[i].split(/<\/table>/i)[0]).map(cells).map((r) => r.map(text))) {
+      if (c.length < 5 || !/^\d+$/.test(c[0])) continue;
+      const mob = c[3].replace(/\D/g, '');
+      out.push({ name: titleCase(c[1]).replace(/\s+PS$/i, '') + ' PS', unit: district, phone: /^0?\d{3,5}-?\d{5,8}$/.test(c[2].replace(/\s/g, '')) && !/^[6-9]\d{9}$/.test(c[2]) ? c[2].replace(/^([1-5]\d{9})$/, '0$1') : null, mobile: /^941[12]\d{6}$/.test(mob) ? mob : null, email: email(c[4]) });
+    }
+  }
+  return { source: url, sourceName: 'Uttarakhand Police: telephone directory', rows: out };
+};
+
+// Punjab: the office e-mail directory lists every station as "PS <name> (<police district>)".
+A.PB = async () => {
+  const url = 'https://www.punjabpolice.gov.in/en/contact-us/punjab-police-officer/';
+  const h = await get(url, { timeout: 90000 });
+  const out = [];
+  let last = null;
+  for (const c of rows(h || '').map(cells).map((r) => r.map((x) => deobf(text(x))))) {
+    const n = c.find((v) => /^PS\b/i.test(v));
+    if (!n) continue;
+    let unit = n.match(/\(([^)]+)\)\s*$/)?.[1];
+    let nm = n.replace(/\s*\([^)]*\)\s*$/, '');
+    if (/\bGRP\b/i.test(nm)) unit = 'GRP';
+    if (!unit) { const m = nm.match(/\s((?:Nawan Shahar|Tarn Taran|[A-Z][a-z]+)(?:-[CR])?)$/); if (m && m[1].length > 3) { unit = m[1]; nm = nm.slice(0, -m[0].length); } }
+    unit ||= last; last = unit;
+    out.push({ name: nm.replace(/^PS\s+/i, '') + ' PS', unit, email: email(c.join(' ')) });
+  }
+  return { source: url, sourceName: 'Punjab Police: office e-mail directory', rows: out };
+};
+
+// Assam: "One Post One Number" PDF of official CUG numbers, post by post under district headers.
+// The number column does not line up reliably with the post names in the PDF text, so only station names are kept.
+A.AS = async () => {
+  const url = 'https://police.assam.gov.in/sites/default/files/swf1/dms76_opon-final.pdf';
+  const r = await get(url, { type: 'raw', timeout: 90000 });
+  if (!r) return null;
+  const file = path.join(os.tmpdir(), `as-opon-${process.pid}.pdf`);
+  await writeFile(file, Buffer.from(await r.arrayBuffer()));
+  const txt = execFileSync('pdftotext', ['-layout', file, '-'], { maxBuffer: 1 << 27 }).toString('utf8');
+  const KEYS = [['WEST KARBI', 'West Karbi Anglong'], ['HAMREN', 'West Karbi Anglong'], ['KARBI', 'Karbi Anglong'], ['K/ANGLONG', 'Karbi Anglong'], ['KAMRUP METRO', 'Kamrup Metropolitan'], ['GUWAHATI', 'Kamrup Metropolitan'], ['KAMRUP', 'Kamrup'], ['SOUTH SALMARA', 'South Salmara-Mankachar'], ['BISWANATH', 'Biswanath'], ['SADIYA', 'Tinsukia'], ['DIMA HASAO', 'Dima Hasao'], ['SPR PANDU', 'GRP'], ['HEADQUARTERS', 'HQ'],
+    ...['Baksa', 'Bajali', 'Barpeta', 'Bongaigaon', 'Cachar', 'Charaideo', 'Chirang', 'Darrang', 'Dhemaji', 'Dhubri', 'Dibrugarh', 'Goalpara', 'Golaghat', 'Hailakandi', 'Hojai', 'Jorhat', 'Karimganj', 'Kokrajhar', 'Lakhimpur', 'Majuli', 'Morigaon', 'Nagaon', 'Nalbari', 'Sivasagar', 'Sonitpur', 'Tamulpur', 'Tinsukia', 'Udalguri'].map((d) => [d.toUpperCase(), d])];
+  const out = [];
+  let unit = null;
+  for (const line of txt.split('\n')) {
+    const up = line.toUpperCase();
+    const isPost = /\b(O\/C|O\.?C|I\/C|IN-?CHARGE)|P\.?\s?S\.?\b|O\.?P\b/.test(up);
+    // District headers: un-numbered title lines, or the "S.P <district>" row that opens each section.
+    if ((!isPost && !/^\s*\d/.test(up)) || /^\s*\d+\s+S\.?\s?P\.?\s/.test(up)) { const k = KEYS.find(([w]) => up.includes(w)); if (k && !/DUPLICATE|GIVEN TO/.test(up)) unit = k[1]; }
+    // "O/C Rangia P.S.", "Officer-In-Charge, Dispur P.S", "O/C, Sonari Police Station", or "Rangapara P.S., O/C".
+    const m = line.match(/(?:O\/C|\bO\.?\s?C\.?|I\/C|Officer\s*-?\s*In\s*-?\s*Charge)[\s,]*([A-Za-z][A-Za-z .()-]*?)\s*(?:\bP\.?\s?S\b\.?|Police Station)/i)
+      || line.match(/^\s*\d+\s+([A-Za-z][A-Za-z .-]*?)\s*(?:\bP\.?\s?S\b\.?|Police Station)[,\s]*(?:as\s+)?O\/C\b/i);
+    const nm = m && titleCase(m[1].replace(/[.,]$/, '').replace(/\bsador\b/i, 'Sadar').trim()) + ' PS';
+    // The PDF repeats some sections (e.g. Hojai under Nagaon); keep the first.
+    if (nm && unit && unit !== 'HQ' && !out.some((r) => r.name === nm)) out.push({ name: nm, unit });
+  }
+  return { source: url, sourceName: 'Assam Police: "One Post One Number" list (station names)', rows: out };
+};
+
+// States with no station list, and why (from a survey of every state police website, Nov 2026).
 const NOT_AVAILABLE = {
   AP: 'appolice.gov.in serves its station list only to a browser session (anti-bot check).',
   AR: 'Arunachal Police publishes district SPs but no police-station list.',
-  AS: 'Assam Police publishes station numbers only as PDFs ("One Post One Number"); not parsed yet.',
   GJ: 'police.gujarat.gov.in did not respond.',
   HP: 'hppolice.gov.in returns 404; the citizen portal needs a CAPTCHA login.',
   LA: 'Ladakh Police publishes control-room numbers only.',
@@ -423,17 +605,11 @@ const NOT_AVAILABLE = {
   MN: 'manipurpolice.gov.in did not respond.',
   MP: 'mppolice.gov.in did not respond.',
   NL: 'Nagaland Police publishes headquarters officers only.',
-  PB: 'Punjab publishes station e-mails and a PDF list; not parsed yet.',
-  RJ: 'Rajasthan\'s directory is a live dashboard app that needs a browser; not scraped yet.',
-  SK: 'Sikkim: small static list; not added yet.',
-  TR: 'Tripura: each of 8 district police sites has its own format; not added yet.',
-  UK: 'Uttarakhand: telephone directory covers only some districts; not added yet.',
-  WB: 'West Bengal state police stations need many form requests; only Kolkata Police is included so far.',
 };
 
 /* ------------------------------------------------------------------ district matching */
 const norm = (s) => String(s || '').toLowerCase().replace(/&/g, 'and').replace(/\b(district|police|city|rural|urban|commissionerate|range|def|executive force|town)\b/g, '').replace(/[^a-z]/g, '');
-const ALIAS = { anugola: 'angul', baleshwar: 'balasore', baragada: 'bargarh', debagada: 'debagarh', kataka: 'cuttack', kendrapada: 'kendrapara', sundaragada: 'sundargarh', raurkela: 'sundargarh', bhubaneswar: 'khordha', khurda: 'khordha', keonjhar: 'kendujhar', sonepur: 'subarnapur', bolangir: 'balangir', nowrangpur: 'nabarangpur', trichy: 'tiruchirappalli', avadi: 'tiruvallur', tambaram: 'chengalpattu', tirupattur: 'tirupathur', bhadradrikothagudem: 'bhadradrikothagudem', ramagundam: 'peddapalli', rachakonda: 'medchalmalkajgiri', tumkur: 'tumakuru', kgf: 'kolar', naughachhia: 'bhagalpur', lohardega: 'lohardaga', siaha: 'saiha', awantipora: 'pulwama', handwara: 'kupwara', sopore: 'baramulla', dabwali: 'sirsa', hansi: 'hisar', sribhumi: 'karimganj',bangalore: 'bengaluru', bengaluruurban: 'bangaloreurban', bengaluru: 'bangaloreurban', bengalururural: 'bangalorerural', mysuru: 'mysore', belagavi: 'belagavi', shivamogga: 'shimoga', chikkamagaluru: 'chikmagalur', vijayapura: 'bijapur', gadag: 'gadaga', chikkaballapura: 'chikkaballapur', chamarajanagara: 'chamarajanagar', trivandrum: 'thiruvananthapuram', tvm: 'thiruvananthapuram', kochi: 'ernakulam', calicut: 'kozhikode', purnea: 'purnia', bettiah: 'westchamparan', bagaha: 'westchamparan', motihari: 'eastchamparan', naugachia: 'bhagalpur', gurgaon: 'gurugram', yamunanagar: 'yamunanagar', sribhumi: 'karimganj', kawardha: 'kabirdham', gpm: 'gaurelapendramarwahi', mcb: 'manendragarhchirmiribharatpur', baikunthpur: 'koriya', ambikapur: 'surguja', jagdalpur: 'bastar', dantewada: 'dakshinbastardantewada', kanker: 'uttarbastarkanker', khairagarh: 'khairagarhchhuikhadangandai', mohla: 'mohlamanpurambagarhchowki', bilaigarh: 'sarangarhbilaigarh', bhadoi: 'bhadohi', kheri: 'lakhimpurkheri' };
+const ALIAS = { anugola: 'angul', baleshwar: 'balasore', baragada: 'bargarh', debagada: 'debagarh', kataka: 'cuttack', kendrapada: 'kendrapara', sundaragada: 'sundargarh', raurkela: 'sundargarh', bhubaneswar: 'khordha', khurda: 'khordha', keonjhar: 'kendujhar', sonepur: 'subarnapur', bolangir: 'balangir', nowrangpur: 'nabarangpur', trichy: 'tiruchirappalli', avadi: 'tiruvallur', tambaram: 'chengalpattu', tirupattur: 'tirupathur', bhadradrikothagudem: 'bhadradrikothagudem', ramagundam: 'peddapalli', rachakonda: 'medchalmalkajgiri', tumkur: 'tumakuru', kgf: 'kolar', naughachhia: 'bhagalpur', lohardega: 'lohardaga', siaha: 'saiha', awantipora: 'pulwama', handwara: 'kupwara', sopore: 'baramulla', dabwali: 'sirsa', hansi: 'hisar', sribhumi: 'karimganj',bangalore: 'bengaluru', bengaluruurban: 'bangaloreurban', bengaluru: 'bangaloreurban', bengalururural: 'bangalorerural', mysuru: 'mysore', belagavi: 'belagavi', shivamogga: 'shimoga', chikkamagaluru: 'chikmagalur', vijayapura: 'bijapur', gadag: 'gadaga', chikkaballapura: 'chikkaballapur', chamarajanagara: 'chamarajanagar', trivandrum: 'thiruvananthapuram', tvm: 'thiruvananthapuram', kochi: 'ernakulam', calicut: 'kozhikode', purnea: 'purnia', bettiah: 'westchamparan', bagaha: 'westchamparan', motihari: 'eastchamparan', naugachia: 'bhagalpur', gurgaon: 'gurugram', yamunanagar: 'yamunanagar', sribhumi: 'karimganj', kawardha: 'kabirdham', gpm: 'gaurelapendramarwahi', mcb: 'manendragarhchirmiribharatpur', baikunthpur: 'koriya', ambikapur: 'surguja', jagdalpur: 'bastar', dantewada: 'dakshinbastardantewada', kanker: 'uttarbastarkanker', khairagarh: 'khairagarhchhuikhadangandai', mohla: 'mohlamanpurambagarhchowki', bilaigarh: 'sarangarhbilaigarh', bhadoi: 'bhadohi', kheri: 'lakhimpurkheri', batala: 'gurdaspur', nawanshahar: 'shahidbhagatsinghnagar', sbsnagar: 'shahidbhagatsinghnagar', khanna: 'ludhiana', ropar: 'rupnagar', mohali: 'sahibzadaajitsinghnagar', sasnagar: 'sahibzadaajitsinghnagar', ferozpur: 'firozpur', ferozepur: 'firozpur', firozepur: 'firozpur', muktsar: 'srimuktsarsahib', mukatsar: 'srimuktsarsahib', fardikot: 'faridkot', pathannkot: 'pathankot', jalr: 'jalandhar', jalandharrl: 'jalandhar', jalandar: 'jalandhar', amritsarc: 'amritsar', amritsarr: 'amritsar', jalandharc: 'jalandhar', jalandharr: 'jalandhar', ludhianac: 'ludhiana', ludhianar: 'ludhiana', ganganagar: 'sriganganagar', hanumangargh: 'hanumangarh', bhiwadi: 'khairthaltijara', jalore: 'jalore' };
 const canon = (s) => { const n = norm(s); return ALIAS[n] || n; };
 const bigrams = (s) => { const o = []; for (let i = 0; i < s.length - 1; i++) o.push(s.slice(i, i + 2)); return o; };
 const dice = (a, b) => { const A2 = bigrams(a), B = bigrams(b); if (!A2.length || !B.length) return 0; const m = new Map(); for (const x of A2) m.set(x, (m.get(x) || 0) + 1); let h = 0; for (const x of B) if (m.get(x) > 0) { h++; m.set(x, m.get(x) - 1); } return (2 * h) / (A2.length + B.length); };
@@ -451,7 +627,7 @@ function districtOf(unit, districts, overrides = {}) {
   }
   return score >= 0.8 ? best : null;
 }
-const OVERRIDE = { KA: { 'Bengaluru City': 'Bangalore Urban', Bengaluru: 'Bangalore Rural' }, DL: {}, WB: { Kolkata: 'Kolkata' } };
+const OVERRIDE = { KA: { 'Bengaluru City': 'Bangalore Urban', Bengaluru: 'Bangalore Rural' }, DL: {}, WB: { Kolkata: 'Kolkata', 'Asansol-Durgapur': 'Paschim Bardhaman', Barrackpore: 'North 24 Parganas', Bidhannagar: 'North 24 Parganas', Bangaon: 'North 24 Parganas', Barasat: 'North 24 Parganas', Basirhat: 'North 24 Parganas', Chandannagar: 'Hooghly', 'Hooghly Rural': 'Hooghly', Howrah: 'Howrah', 'Howrah Rural': 'Howrah', Siliguri: 'Darjeeling', Baruipur: 'South 24 Parganas', 'Diamond Harbour': 'South 24 Parganas', Sundarban: 'South 24 Parganas', Islampur: 'Uttar Dinajpur', Raiganj: 'Uttar Dinajpur', Jangipur: 'Murshidabad', Murshidabad: 'Murshidabad', Krishnanagar: 'Nadia', Ranaghat: 'Nadia', Coochbehar: 'Cooch Behar', Malda: 'Maldah', 'Purba Burdwan': 'Purba Bardhaman' } };
 
 async function main() {
   await mkdir(OUT, { recursive: true });
